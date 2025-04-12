@@ -53,6 +53,13 @@ return {
   end,
   opts = {
     sources = { "filesystem", "buffers", "git_status" },
+    close_if_last_window = false,
+    buffers = {
+      follow_current_file = {
+        enabled = true,
+        leave_dirs_open = false,
+      },
+    },
     filesystem = {
       bind_to_cwd = true,
       follow_current_file = { enable = true },
@@ -60,8 +67,22 @@ return {
       hijack_netrw_behavior = "open_current",
       filtered_items = {
         hide_dotfiles = false,
+      },
+      remember_last_position = true,
+      open_files_do_not_replace_types = { "terminal", "trouble", "qf" },
+      window = {
+        mappings = {
+          ["<tab>"] = "toggle_node"
+        }
       }
     },
-
+    event_handlers = {
+      {
+        event = "neo_tree_buffer_enter",
+        handler = function()
+          vim.cmd([[highlight! link NeoTreeDirectoryIcon NvimTreeFolderIcon]])
+        end,
+      }
+    }
   },
 }
