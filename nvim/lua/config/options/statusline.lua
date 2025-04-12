@@ -66,7 +66,7 @@ _G.statusline = {
 local function setup_statusline()
   vim.opt.statusline = table.concat({
     -- 模式显示（颜色由get_mode函数动态设置）
-    '%#StatusLineMode# %{v:lua.statusline.get_mode()}%*',
+    '%#StatusLineMode# %{v:lua.statusline.get_mode()} %*',
    -- 文件相对路径
     '%#StatusLinePath# %{v:lua.statusline.get_relative_path()}%*',
     -- 文件类型
