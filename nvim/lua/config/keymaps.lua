@@ -35,3 +35,6 @@ map("n", "<leader><tab>[", "<cmd>tabprevious<cr>", { desc = "Previous Tab" })
 
 -- quit
 map("n", "<leader>qq", "<cmd>qa<cr>", { desc = "Quit All" })
+
+-- Diagnostics
+map("n", "gl", function() vim.diagnostic.open_float() end, { desc = "Open Diagnostics in Float" })

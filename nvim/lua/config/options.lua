@@ -48,5 +48,8 @@ vim.opt.scrolloff = 10
 vim.opt.splitright = true
 vim.opt.splitbelow = true
 
+-- Don't wrap
+vim.opt.wrap = false
+
 -- Custom statusline without plugin
 require("config.options.statusline")
