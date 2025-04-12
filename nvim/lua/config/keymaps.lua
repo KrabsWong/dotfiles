@@ -38,3 +38,6 @@ map("n", "<leader>qq", "<cmd>qa<cr>", { desc = "Quit All" })
 
 -- Diagnostics
 map("n", "gl", function() vim.diagnostic.open_float() end, { desc = "Open Diagnostics in Float" })
+
+-- Code format
+map("n", "<leader>cf", function() require("conform").format({ lsp_format = "fallback" }) end, { desc = "Format current file" })
