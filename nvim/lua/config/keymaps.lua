@@ -29,11 +29,26 @@ map("n", "<leader><tab>]", "<cmd>tabnext<cr>", { desc = "Next Tab" })
 map("n", "<leader><tab>d", "<cmd>tabclose<cr>", { desc = "Close Tab" })
 map("n", "<leader><tab>[", "<cmd>tabprevious<cr>", { desc = "Previous Tab" })
 
--- quit
-map("n", "<leader>qq", "<cmd>xa<cr>", { desc = "Save all and quit All" })
+-- quit all
+map("n", "<leader>qq", function()
+  pcall(vim.cmd, "ToggleTermToggleAll")
+  vim.cmd("xa")
+end, { desc = "Save all and quit All" })
 
 -- Diagnostics
-map("n", "gl", function() vim.diagnostic.open_float() end, { desc = "Open Diagnostics in Float" })
+map("n", "gl", function()
+  vim.diagnostic.open_float()
+end, { desc = "Open Diagnostics in Float" })
+
+map("n", "<leader>dl", function()
+  vim.diagnostic.setloclist({ open = true })
+end, { noremap = true, silent = true, desc = "Open diagnostics list(Location List)" })
+map("n", "<leader>dlc", function()
+  vim.diagnostic.setloclist({ open = false })
+end, { noremap = true, silent = true, desc = "Close diagnostics list(Location List)" })
+
 
 -- Code format
-map("n", "<leader>cf", function() require("conform").format({ lsp_format = "fallback" }) end, { desc = "Format current file" })
+map("n", "<leader>cf", function()
+  require("conform").format({ lsp_format = "fallback" })
+end, { desc = "Format current file" })

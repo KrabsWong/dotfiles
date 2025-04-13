@@ -9,7 +9,8 @@ return {
     open_mapping = false, -- 禁用插件自带的快捷键
     start_in_insert = true,
     direction = "float",
-    on_open = function(term)
+    shade_terminals = true,
+    on_open = function()
       vim.cmd("startinsert!") -- 自动进入插入模式
     end,
   }

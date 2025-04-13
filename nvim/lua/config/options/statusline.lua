@@ -1,5 +1,4 @@
--- 在你的 init.lua 或 statusline.lua 文件中添加以下配置
-
+-- statusbar 自定义实现
 -- 定义模式显示文本和对应颜色
 local mode_info = {
   ['n'] = { text = 'NORMAL', fg = '#000000', bg = '#7aa2f7' },  -- 蓝色
@@ -28,14 +27,14 @@ local mode_info = {
 local function get_mode()
   local current_mode = vim.api.nvim_get_mode().mode
   local info = mode_info[current_mode] or { text = string.upper(current_mode), fg = '#000000', bg = '#c0caf5' }
-  
+
   -- 动态设置模式高亮
   vim.api.nvim_set_hl(0, 'StatusLineMode', {
     fg = info.fg,
     bg = info.bg,
     bold = true
   })
-  
+
   return info.text
 end
 
@@ -43,7 +42,7 @@ end
 local function get_relative_path()
   local filepath = vim.fn.expand('%:p')
   if filepath == '' then return '' end
-  
+
   -- 尝试获取工程根目录（使用.git作为标记）
   local project_root = vim.fn.finddir('.git', '.;')
   if project_root ~= '' then
@@ -51,7 +50,7 @@ local function get_relative_path()
     local relative_path = vim.fn.fnamemodify(filepath, ':p'):sub(#project_root + 2)
     return relative_path
   end
-  
+
   -- 如果没有.git目录，则返回相对于当前目录的路径
   return vim.fn.fnamemodify(filepath, ':~:.')
 end
