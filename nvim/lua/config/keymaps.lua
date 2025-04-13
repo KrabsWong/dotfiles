@@ -30,10 +30,7 @@ map("n", "<leader><tab>d", "<cmd>tabclose<cr>", { desc = "Close Tab" })
 map("n", "<leader><tab>[", "<cmd>tabprevious<cr>", { desc = "Previous Tab" })
 
 -- quit all
-map("n", "<leader>qq", function()
-  pcall(vim.cmd, "ToggleTermToggleAll")
-  vim.cmd("xa")
-end, { desc = "Save all and quit All" })
+map("n", "<leader>qq", "<cmd>qa!<cr>", { desc = "Quit all" })
 
 -- Diagnostics
 map("n", "gl", function()
@@ -46,7 +43,6 @@ end, { noremap = true, silent = true, desc = "Open diagnostics list(Location Lis
 map("n", "<leader>dlc", function()
   vim.diagnostic.setloclist({ open = false })
 end, { noremap = true, silent = true, desc = "Close diagnostics list(Location List)" })
-
 
 -- Code format
 map("n", "<leader>cf", function()
