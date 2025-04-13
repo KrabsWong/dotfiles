@@ -1,5 +1,9 @@
 local map = vim.keymap.set
 
+-- Clear highlights on search when pressing <Esc> in normal mode
+--  See `:help hlsearch`
+map("n", "<Esc>", "<cmd>nohlsearch<CR>")
+
 -- better up/down
 map({ "n", "x" }, "j", "v:count == 0 ? 'gj' : 'j'", { desc = "Down", expr = true, silent = true })
 map({ "n", "x" }, "<Down>", "v:count == 0 ? 'gj' : 'j'", { desc = "Down", expr = true, silent = true })
@@ -30,7 +34,7 @@ map("n", "<leader><tab>d", "<cmd>tabclose<cr>", { desc = "Close Tab" })
 map("n", "<leader><tab>[", "<cmd>tabprevious<cr>", { desc = "Previous Tab" })
 
 -- quit all
-map("n", "<leader>qq", "<cmd>qa!<cr>", { desc = "Quit all" })
+map("n", "<leader>qq", "<cmd>qa!<cr>", { desc = "Quit All" })
 
 -- Diagnostics
 map("n", "gl", function()

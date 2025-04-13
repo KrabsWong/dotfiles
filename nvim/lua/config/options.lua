@@ -31,10 +31,6 @@ vim.opt.smartcase = true
 -- Keep signcolumn on by default
 vim.opt.signcolumn = "yes"
 
--- Clear highlights on search when pressing <Esc> in normal mode
---  See `:help hlsearch`
-vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>")
-
 -- Sets how neovim will display certain whitespace characters in the editor.
 --  See `:help 'list'`
 --  and `:help 'listchars'`
@@ -50,6 +46,9 @@ vim.opt.splitbelow = true
 
 -- Don't wrap
 vim.opt.wrap = false
+
+-- Clipboard
+vim.opt.clipboard = "unnamedplus"
 
 -- Custom statusline without plugin
 require("config.options.statusline")
