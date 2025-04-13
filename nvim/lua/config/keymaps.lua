@@ -15,10 +15,6 @@ map("n", "<C-l>", "<C-w>l", { desc = "Go to Right Window", remap = true })
 -- new file
 map("n", "<leader>fn", "<cmd>enew<cr>", { desc = "New File" })
 
--- Terminal Mappings
--- map("t", "<C-/>", "<cmd>close<cr>", { desc = "Hide Terminal" })
--- map("t", "<c-_>", "<cmd>close<cr>", { desc = "which_key_ignore" })
-
 -- windows
 map("n", "<leader>-", "<C-W>s", { desc = "Split Window Below", remap = true })
 map("n", "<leader>|", "<C-W>v", { desc = "Split Window Right", remap = true })
