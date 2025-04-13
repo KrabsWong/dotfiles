@@ -48,9 +48,9 @@ return {
       open_files_do_not_replace_types = { "terminal", "trouble", "qf" },
       window = {
         mappings = {
-          ["<tab>"] = "toggle_node"
-        }
-      }
+          ["<tab>"] = "toggle_node",
+        },
+      },
     },
     event_handlers = {
       {
@@ -58,7 +58,7 @@ return {
         handler = function()
           vim.cmd([[highlight! link NeoTreeDirectoryIcon NvimTreeFolderIcon]])
         end,
-      }
-    }
+      },
+    },
   },
 }

@@ -40,19 +40,7 @@ end
 
 -- 获取文件相对路径
 local function get_relative_path()
-  local filepath = vim.fn.expand('%:p')
-  if filepath == '' then return '' end
-
-  -- 尝试获取工程根目录（使用.git作为标记）
-  local project_root = vim.fn.finddir('.git', '.;')
-  if project_root ~= '' then
-    project_root = vim.fn.fnamemodify(project_root, ':h')
-    local relative_path = vim.fn.fnamemodify(filepath, ':p'):sub(#project_root + 2)
-    return relative_path
-  end
-
-  -- 如果没有.git目录，则返回相对于当前目录的路径
-  return vim.fn.fnamemodify(filepath, ':~:.')
+  return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":~:.")
 end
 
 -- 将函数暴露给 v:lua

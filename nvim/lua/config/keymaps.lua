@@ -44,7 +44,7 @@ end, { desc = "Open Diagnostics in Float" })
 map("n", "<leader>dl", function()
   vim.diagnostic.setloclist({ open = true })
 end, { noremap = true, silent = true, desc = "Open diagnostics list(Location List)" })
-map("n", "<leader>dlc", function()
+map("n", "<leader>dc", function()
   vim.diagnostic.setloclist({ open = false })
 end, { noremap = true, silent = true, desc = "Close diagnostics list(Location List)" })
 
