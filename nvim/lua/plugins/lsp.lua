@@ -196,6 +196,7 @@ return {
       -- pyright = {},
       rust_analyzer = {},
       eslint = {},
+      ts_ls = {},
       vuels = {},
       marksman = {},
       -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
