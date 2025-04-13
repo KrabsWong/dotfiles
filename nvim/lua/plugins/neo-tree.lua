@@ -40,7 +40,7 @@ return {
         leave_dirs_open = false,
       },
       use_libuv_file_watcher = true,
-      hijack_netrw_behavior = "open_default",
+      hijack_netrw_behavior = "disabled",
       filtered_items = {
         hide_dotfiles = false,
       },
