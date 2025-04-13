@@ -74,6 +74,10 @@ local function setup_statusline()
     '%#StatusLineModified# %m%r%h%w %*',
     -- 右侧对齐
     '%=',
+    -- Git 分支信息
+    ' ',
+    '%{get(b:,"gitsigns_head", "")} [',
+    '%{get(b:,"gitsigns_status", "")}] ',
     -- 编码和行结束符
     '%#StatusLineEncoding# %{&fenc!=#""?&fenc:&enc}[%{&ff}] %*',
     -- 光标位置
