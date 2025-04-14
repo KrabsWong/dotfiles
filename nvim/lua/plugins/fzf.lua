@@ -4,7 +4,12 @@ return {
   dependencies = { "nvim-tree/nvim-web-devicons" },
   -- or if using mini.icons/mini.nvim
   -- dependencies = { "echasnovski/mini.icons" },
-  opts = {},
+  opts = {
+    file_ignore_patterns = { "node_modules", ".git", "vendor" },
+    grep = {
+      rg_opts = "--hidden --glob=!{node_modules/*,.git/*,vendor/*}"
+    },
+  },
   keys = {
     {
       "<leader>ff",
