@@ -69,7 +69,7 @@ local function setup_statusline()
     -- 编码和行结束符
     '%#StatusLineEncoding# %{&fenc!=#""?&fenc:&enc}[%{&ff}] %*',
     -- 光标位置
-    '%#StatusLinePos# %l:%c %*',
+    '%#StatusLinePos# %l:%c[%p%%]',
   })
   -- 定义其他高亮组
   vim.api.nvim_set_hl(0, 'StatusLineModified', { bold = true })
