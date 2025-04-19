@@ -51,4 +51,4 @@ vim.opt.wrap = false
 vim.opt.clipboard = "unnamedplus"
 
 -- Custom statusline without plugin
-require("config.options.statusline")
+-- require("config.options.statusline")
