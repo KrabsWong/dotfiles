@@ -4,6 +4,9 @@ local map = vim.keymap.set
 --  See `:help hlsearch`
 map("n", "<Esc>", "<cmd>nohlsearch<CR>")
 
+-- Execute the current line
+map("n", "<leader><leader>x", "<cmd>source %<CR>", { desc = "Execute the current line" })
+
 -- better up/down
 map({ "n", "x" }, "j", "v:count == 0 ? 'gj' : 'j'", { desc = "Down", expr = true, silent = true })
 map({ "n", "x" }, "<Down>", "v:count == 0 ? 'gj' : 'j'", { desc = "Down", expr = true, silent = true })
