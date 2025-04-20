@@ -79,5 +79,12 @@ return {
       end,
       desc = "Find in neovim configuration",
     },
+    {
+      "<leader>gf",
+      function()
+        require("fzf-lua").git_bcommits()
+      end,
+      desc = "Get git commit history",
+    },
   },
 }

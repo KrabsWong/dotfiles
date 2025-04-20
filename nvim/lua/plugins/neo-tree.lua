@@ -27,6 +27,9 @@ return {
   end,
   opts = {
     sources = { "filesystem", "buffers", "git_status" },
+    source_selector = {
+      winbar = true,
+    },
     close_if_last_window = true,
     buffers = {
       follow_current_file = {
