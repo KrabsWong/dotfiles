@@ -22,5 +22,15 @@ return {
         return " " .. icon .. count
       end,
     },
+    highlights = {
+      buffer_selected = {
+        italic = false,
+        bold = true,
+      },
+      numbers_selected = {
+        bold = false,
+        italic = false,
+      },
+    },
   },
 }
