@@ -30,6 +30,7 @@ map("n", "<leader>wd", "<C-W>c", { desc = "Delete Window", remap = true })
 -- Bufferline tabs
 map("n", "<C-]>", ":BufferLineCycleNext<CR>", { desc = "Cycle to next buffer" })
 map("n", "<C-[>", ":BufferLineCyclePrev<CR>", { desc = "Cycle to previous buffer" })
+map("n", "<leader>bd", ":bd<CR>", { desc = "Close current buffer" })
 
 -- quit all
 map("n", "<leader>qq", "<cmd>qa!<cr>", { desc = "Quit All" })
