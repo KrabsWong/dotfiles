@@ -1,36 +1,57 @@
-# My Personal Neovim Configuration
+# My Personal Dotfiles: Kitty & Neovim
 
-This repository stores my personal Neovim configuration files. It's built upon the modern [`lazy.vim`](https://github.com/folke/lazy.nvim) plugin manager, aiming for a fast, modular, and efficient development environment tailored to my workflow.
+This repository houses my personal configuration files (dotfiles) for the Kitty terminal emulator and the Neovim editor.
 
-## ✨ Features
+## 🐱 Kitty
 
-*   **Plugin Management:** Uses `lazy.vim` for declarative and fast plugin loading.
-*   **Modular Structure:** Configuration is broken down into logical units under the `lua/` directory (e.g., `config/` for core settings, `plugins/` for plugin specifications).
-*   **LSP Integration:** Configured for Language Server Protocol support, enabling features like autocompletion, diagnostics, code actions, etc. (Specific LSP servers might need separate installation).
-*   **File Navigation:** Includes file tree explorers like `neo-tree.nvim`.
-*   **Fuzzy Finding:** Leverages tools like `telescope.nvim` or `fzf-lua` for quick searching across files, buffers, commands, etc.
-*   **Terminal Integration:** Seamless terminal access within Neovim using `toggleterm.nvim`.
-*   **Custom Keymaps:** Sensible and ergonomic keybindings defined in `lua/config/keymaps.lua`.
-*   **UI Enhancements:** Customized statusline, potentially themes, and other visual improvements.
-*   **AI Assistant:** Integration with AI coding tools via `avante.nvim`.
-*   *(Add any other specific features or plugins you rely on heavily)*
+My Kitty setup focuses on a clean look, efficient keybindings, and themes.
+
+*   **Configuration:** Main settings are in `kitty/kitty.conf`.
+*   **Keymaps:** Custom keybindings are defined in `kitty/config/keymap.conf`.
+*   **Options:** Specific terminal options are set in `kitty/config/options.conf`.
+*   **Themes:** Various themes are available under `kitty/theme/`, including Dracula, Tokyo Night, and a custom diff theme.
+
+## ✨ Neovim (LazyVim based)
+
+My Neovim configuration leverages `lazy.vim` for plugin management, featuring a modular structure, LSP integration, and various UI/UX enhancements.
+
+*   **Plugin Management:** Uses `lazy.vim` for declarative and fast plugin loading (`nvim/lazy-lock.json` tracks plugin versions).
+*   **Entry Point:** The main configuration starts at `nvim/init.lua`.
+*   **Modular Structure:** Configuration is broken down into logical units under `nvim/lua/`:
+    *   `nvim/lua/config/`: Core Neovim settings (options, keymaps, autocommands).
+    *   `nvim/lua/plugins/`: Plugin specifications managed by `lazy.vim`.
+*   **LSP Integration:** Configured for Language Server Protocol support.
+*   **File Navigation & Fuzzy Finding:** Likely uses plugins like `neo-tree.nvim` and `telescope.nvim` (configured within `nvim/lua/plugins/`).
+*   **Customization:** Includes custom keymaps, UI enhancements (statusline, themes), and potentially AI assistant integration.
 
 ## 🚀 Installation
 
-1.  **Prerequisites:**
-    *   Neovim (v0.9.0 or later recommended).
-    *   Git.
-    *   A Nerd Font installed and configured in your terminal for icons.
-    *   (Optional but recommended) `ripgrep` for fuzzy finding, `fd` for file searching.
+### Prerequisites
 
-2.  **Clone the repository:**
+*   Kitty terminal emulator.
+*   Neovim (v0.9.0 or later recommended).
+*   Git.
+*   A Nerd Font installed and configured in your terminal for icons (required by some Neovim plugins).
+*   (Optional but recommended for Neovim) `ripgrep` for fuzzy finding, `fd` for file searching.
+
+### Steps
+
+1.  **Clone the repository:**
     ```bash
-    # Backup your existing nvim config first if you have one
+    git clone <repository-url> ~/your/local/workspace/dotfiles # Or your preferred location
+    ```
+
+2.  **Symlink configurations:**
+    ```bash
+    # Backup existing configs first!
+    # mv ~/.config/kitty ~/.config/kitty.bak
     # mv ~/.config/nvim ~/.config/nvim.bak
     # mv ~/.local/share/nvim ~/.local/share/nvim.bak
     # mv ~/.local/state/nvim ~/.local/state/nvim.bak
     # mv ~/.cache/nvim ~/.cache/nvim.bak
 
+    ln -s ~/your/local/workspace/dotfiles/kitty ~/.config/kitty
+    ln -s ~/your/local/workspace/dotfiles/nvim ~/.config/nvim
     ```
 
 3.  **Launch Neovim:**
@@ -39,14 +60,33 @@ This repository stores my personal Neovim configuration files. It's built upon t
     ```
     `lazy.vim` should automatically bootstrap itself and install all the configured plugins on the first launch.
 
-## 📂 Structure
+4.  **Launch Kitty:** Simply start Kitty, and it should pick up the new configuration.
 
-*   `init.lua`: The main entry point for the configuration.
-*   `lua/config/`: Core Neovim settings (options, keymaps, autocommands).
-*   `lua/plugins/`: Plugin specifications managed by `lazy.vim`. Each file typically configures one or more related plugins.
+## 📂 Structure Overview
+
+```
+.
+├── .gitignore
+├── README.md
+├── kitty/
+│   ├── config/
+│   │   ├── keymap.conf
+│   │   └── options.conf
+│   ├── kitty.conf
+│   └── theme/
+│       ├── diff.conf
+│       ├── dracula.conf
+│       └── tokyo-night-kitty.conf
+└── nvim/
+    ├── .editorconfig
+    ├── init.lua
+    ├── lazy-lock.json
+    └── lua/
+        ├── config/      # Core Neovim settings
+        └── plugins/     # LazyVim plugin specs
+```
 
 ---
 
 *This configuration is primarily for personal use but feel free to browse and take inspiration.*
-```
 
