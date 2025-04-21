@@ -9,6 +9,23 @@ local function reveal_in_tree(selected)
   local success, err = pcall(vim.cmd, command_string)
 end
 
+local function grep_reveal_in_tree(grep_selected)
+  if #grep_selected > 0 and type(grep_selected[1] == "table" and #grep_selected[1] > 0) then
+    local grep_string = grep_selected[1]
+
+    local file_path_pos = string.find(grep_string, ":", 1, true)
+    local file_path
+
+    if file_path_pos then
+      file_path = string.sub(grep_string, 1, file_path_pos - 1)
+      print(vim.inspect(file_path))
+      if file_path and type(file_path) == "string" then
+        reveal_in_tree({ file_path })
+      end
+    end
+  end
+end
+
 return {
   "ibhagwan/fzf-lua",
   -- optional for icon support
@@ -19,40 +36,23 @@ return {
     local actions = require("fzf-lua").actions
     return {
       file_ignore_patterns = { "node_modules", ".git", "vendor" },
-      grep = {
-        rg_opts = "--hidden --glob=!{node_modules/*,.git/*,vendor/*}",
-      },
       files = {
         file_icons = false,
-      },
-      actions = {
-        files = {
+        actions = {
           ["enter"] = function(selected, opts)
             actions.file_edit(selected, opts)
             reveal_in_tree(selected)
           end,
-          ["ctrl-s"] = actions.file_split,
-          ["ctrl-v"] = actions.file_vsplit,
-          ["ctrl-t"] = actions.file_tabedit,
-          ["alt-q"] = actions.file_sel_to_qf,
-          ["alt-Q"] = actions.file_sel_to_ll,
-          ["alt-i"] = actions.toggle_ignore,
-          ["alt-h"] = actions.toggle_hidden,
-          ["alt-f"] = actions.toggle_follow,
         },
-        buffers = {
+      },
+      grep = {
+        file_icons = false,
+        rg_opts = "--hidden --glob=!{node_modules/*,.git/*,vendor/*}",
+        actions = {
           ["enter"] = function(selected, opts)
             actions.file_edit(selected, opts)
-            reveal_in_tree(selected)
+            grep_reveal_in_tree(selected)
           end,
-          ["ctrl-s"] = actions.file_split,
-          ["ctrl-v"] = actions.file_vsplit,
-          ["ctrl-t"] = actions.file_tabedit,
-          ["alt-q"] = actions.file_sel_to_qf,
-          ["alt-Q"] = actions.file_sel_to_ll,
-          ["alt-i"] = actions.toggle_ignore,
-          ["alt-h"] = actions.toggle_hidden,
-          ["alt-f"] = actions.toggle_follow,
         },
       },
     }
