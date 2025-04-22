@@ -21,7 +21,7 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
     *   `nvim/lua/config/`: Core Neovim settings (options, keymaps, autocommands).
     *   `nvim/lua/plugins/`: Plugin specifications managed by `lazy.vim`.
 *   **LSP Integration:** Configured for Language Server Protocol support.
-*   **File Navigation & Fuzzy Finding:** Likely uses plugins like `neo-tree.nvim` and `telescope.nvim` (configured within `nvim/lua/plugins/`).
+*   **File Navigation & Fuzzy Finding:** Likely uses plugins like `neo-tree.nvim` and `fzf-lua.nvim` (configured within `nvim/lua/plugins/`).
 *   **Customization:** Includes custom keymaps, UI enhancements (statusline, themes), and potentially AI assistant integration.
 
 ## 🚀 Installation
