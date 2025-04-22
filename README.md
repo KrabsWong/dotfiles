@@ -24,7 +24,16 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
 *   **File Navigation & Fuzzy Finding:** Likely uses plugins like `neo-tree.nvim` and `fzf-lua.nvim` (configured within `nvim/lua/plugins/`).
 *   **Customization:** Includes custom keymaps, UI enhancements (statusline, themes), and potentially AI assistant integration.
 
+<img width="400" alt="start" src="https://github.com/user-attachments/assets/a946ebfe-6152-4e14-8c26-b75768a92b45" />
+<br />
+<img width="400" alt="auto_cmp" src="https://github.com/user-attachments/assets/4a37b9a9-0427-4188-b56f-a18b6e430c01" />
+<br />
+<img width="400" alt="trouble" src="https://github.com/user-attachments/assets/c8d88dca-4877-4ff9-a87f-7be0d17c286a" />
+<br />
+<img width="400" alt="fzf" src="https://github.com/user-attachments/assets/abf2bf22-25b6-4a10-84a2-53cb9fa71a06" />
+
 ## 🚀 Installation
+
 
 ### Prerequisites
 
