@@ -8,7 +8,17 @@ return {
   ---@type snacks.Config
   opts = {
     indent = {},
-    explorer = {},
+    dashboard = {
+      sections = {
+        { section = "header" },
+        { section = "keys", gap = 1 },
+        { icon = " ", title = "Recent Files", section = "recent_files", indent = 2, padding = { 2, 2 } },
+        { section = "startup" },
+      },
+    },
+    explorer = {
+      replace_netrw = true
+    },
     picker = {},
   },
   keys = {
