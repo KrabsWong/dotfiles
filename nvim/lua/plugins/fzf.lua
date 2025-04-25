@@ -30,12 +30,13 @@ return {
   "ibhagwan/fzf-lua",
   -- optional for icon support
   dependencies = { "nvim-tree/nvim-web-devicons" },
+  event = { "VeryLazy", "CmdlineEnter" },
   -- or if using mini.icons/mini.nvim
   -- dependencies = { "echasnovski/mini.icons" },
   opts = function()
     local actions = require("fzf-lua").actions
     return {
-      file_ignore_patterns = { "node_modules", ".git", "vendor" },
+      file_ignore_patterns = { "node_modules", ".git", "vendor", "dist", "*.lock", "*-lock.json", "build", "bin" },
       files = {
         file_icons = false,
         actions = {
