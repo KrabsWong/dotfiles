@@ -17,6 +17,12 @@ return {
           separator = true,
           text_align = "left",
         },
+        {
+          filetype = "snacks_layout_box",
+          text = "File Explorer",
+          separator = true,
+          text_align = "left",
+        },
       },
       diagnostics_indicator = function(count, level)
         local icon = level:match("error") and " " or " "

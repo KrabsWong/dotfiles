@@ -29,6 +29,7 @@ end
 return {
   "ibhagwan/fzf-lua",
   -- optional for icon support
+  enabled = false,
   dependencies = { "nvim-tree/nvim-web-devicons" },
   event = { "VeryLazy", "CmdlineEnter" },
   -- or if using mini.icons/mini.nvim
@@ -36,13 +37,25 @@ return {
   opts = function()
     local actions = require("fzf-lua").actions
     return {
-      file_ignore_patterns = { "node_modules", ".git", "vendor", "dist", "*.lock", "*-lock.json", "build", "bin" },
+      file_ignore_patterns = {
+        "node_modules",
+        ".git",
+        "vendor",
+        "dist",
+        "*.lock",
+        "*-lock.json",
+        "build",
+        "bin",
+        "public"
+      },
       files = {
         file_icons = false,
         actions = {
           ["enter"] = function(selected, opts)
             actions.file_edit(selected, opts)
-            reveal_in_tree(selected)
+            Snacks.explorer.reveal(opts)
+            -- Auto reveal with neo-tree
+            -- reveal_in_tree(selected)
           end,
         },
       },
@@ -52,7 +65,9 @@ return {
         actions = {
           ["enter"] = function(selected, opts)
             actions.file_edit(selected, opts)
-            grep_reveal_in_tree(selected)
+            Snacks.explorer.reveal(opts)
+            -- Auto reveal with neo-tree
+            -- grep_reveal_in_tree(selected)
           end,
         },
       },
