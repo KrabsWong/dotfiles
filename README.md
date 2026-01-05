@@ -1,6 +1,6 @@
-# My Personal Dotfiles: Kitty & Neovim
+# My Personal Dotfiles: Kitty, Neovim & CodeBuddy
 
-This repository houses my personal configuration files (dotfiles) for the Kitty terminal emulator and the Neovim editor.
+This repository houses my personal configuration files (dotfiles) for the Kitty terminal emulator, the Neovim editor, and CodeBuddy Code statusline configuration.
 
 ## 🐱 Kitty
 
@@ -24,6 +24,34 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
 *   **File Navigation & Fuzzy Finding:** Likely uses plugins like `neo-tree.nvim` and `fzf-lua.nvim` (configured within `nvim/lua/plugins/`).
 *   **Customization:** Includes custom keymaps, UI enhancements (statusline, themes), and potentially AI assistant integration.
 
+## 🤖 CodeBuddy Code Statusline
+
+Custom statusline configuration for CodeBuddy Code, providing real-time session statistics and workspace information.
+
+*   **Configuration:** Custom statusline script located at `codebuddy/statusline.sh`.
+*   **Features:**
+    *   Displays current directory and project context
+    *   Shows git branch, commit hash, and working tree status
+    *   Tracks token usage (input/output) with formatted numbers (K, M, B)
+    *   Shows runtime duration in human-readable format
+    *   Displays tool usage statistics with abbreviations (e.g., Bash:99, Read:31)
+    *   Shows MCP services count and command calls
+    *   Color-coded information for better readability
+*   **Tool Abbreviations:**
+    *   Bash: `Bash`
+    *   Read: `Read`
+    *   Write: `Write`
+    *   Edit: `Edit`
+    *   MultiEdit: `ME`
+    *   TodoWrite: `Todo`
+    *   Grep: `Grep`
+    *   Glob: `Glob`
+    *   WebFetch: `WebF`
+    *   WebSearch: `WebS`
+    *   Task: `Task`
+    *   AskUserQuestion: `Q`
+    *   NotebookEdit: `NE`
+
 <img width="400" alt="start" src="https://github.com/user-attachments/assets/a946ebfe-6152-4e14-8c26-b75768a92b45" />
 <img width="400" alt="auto_cmp" src="https://github.com/user-attachments/assets/4a37b9a9-0427-4188-b56f-a18b6e430c01" />
 <br />
@@ -40,6 +68,8 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
 *   Git.
 *   A Nerd Font installed and configured in your terminal for icons (required by some Neovim plugins).
 *   (Optional but recommended for Neovim) `ripgrep` for fuzzy finding, `fd` for file searching.
+*   CodeBuddy Code (for statusline functionality).
+*   `jq` (for JSON parsing in statusline script).
 
 ### Steps
 
@@ -61,13 +91,23 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
     ln -s ~/your/local/workspace/dotfiles/nvim ~/.config/nvim
     ```
 
-3.  **Launch Neovim:**
+3.  **Configure CodeBuddy Code Statusline:**
+    ```bash
+    # Make the statusline script executable
+    chmod +x ~/your/local/workspace/dotfiles/codebuddy/statusline.sh
+
+    # Configure CodeBuddy Code to use this statusline
+    # In your CodeBuddy Code settings, set the statusline command to:
+    # ~/your/local/workspace/dotfiles/codebuddy/statusline.sh
+    ```
+
+4.  **Launch Neovim:**
     ```bash
     nvim
     ```
     `lazy.vim` should automatically bootstrap itself and install all the configured plugins on the first launch.
 
-4.  **Launch Kitty:** Simply start Kitty, and it should pick up the new configuration.
+5.  **Launch Kitty:** Simply start Kitty, and it should pick up the new configuration.
 
 ## 📂 Structure Overview
 
@@ -84,13 +124,15 @@ My Neovim configuration leverages `lazy.vim` for plugin management, featuring a 
 │       ├── diff.conf
 │       ├── dracula.conf
 │       └── tokyo-night-kitty.conf
-└── nvim/
-    ├── .editorconfig
-    ├── init.lua
-    ├── lazy-lock.json
-    └── lua/
-        ├── config/      # Core Neovim settings
-        └── plugins/     # LazyVim plugin specs
+├── nvim/
+│   ├── .editorconfig
+│   ├── init.lua
+│   ├── lazy-lock.json
+│   └── lua/
+│       ├── config/      # Core Neovim settings
+│       └── plugins/     # LazyVim plugin specs
+└── codebuddy/
+    └── statusline.sh    # Custom CodeBuddy Code statusline
 ```
 
 ---
