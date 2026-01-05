@@ -74,74 +74,45 @@ mcp_services=0
 tool_counts_file=$(mktemp)
 trap "rm -f '$tool_counts_file'" EXIT
 
-# Parse transcript file once and extract all needed data
+# Parse transcript file (now .jsonl format) once and extract all needed data using jq for better performance
 if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$transcript_path" ]; then
-    # Read file once into memory for processing
-    first_timestamp=""
-    last_timestamp=""
+    # Use jq with -s to read all lines and extract all statistics in a single pass
+    jq_output=$(jq -r -s '{
+      input_tokens: map(.providerData.usage.inputTokens // 0) | add,
+      output_tokens: map(.providerData.usage.outputTokens // 0) | add,
+      tool_calls: map(select(.type == "function_call")) | length,
+      first_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | min),
+      last_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | max),
+      command_calls: map(select(.type == "message" and .role == "user" and (.content | tostring | contains("<command-name>")))) | length
+    } | to_entries | map(.value) | @tsv' "$transcript_path" 2>/dev/null || echo "0	0	0	0	0	0")
     
-    while IFS= read -r line; do
-        # Extract tokens (using sed for bash 3 compatibility)
-        case "$line" in
-            *'"inputTokens":'*)
-                val=$(echo "$line" | sed -n 's/.*"inputTokens":\([0-9]*\).*/\1/p')
-                [ -n "$val" ] && input_tokens=$((input_tokens + val))
-                ;;
-        esac
-        case "$line" in
-            *'"outputTokens":'*)
-                val=$(echo "$line" | sed -n 's/.*"outputTokens":\([0-9]*\).*/\1/p')
-                [ -n "$val" ] && output_tokens=$((output_tokens + val))
-                ;;
-        esac
-        
-        # Process function calls
-        case "$line" in
-            *'"type":"function_call"'*)
-                tool_calls=$((tool_calls + 1))
-                
-                # Extract timestamp
-                ts=$(echo "$line" | sed -n 's/.*"timestamp":\([0-9]*\).*/\1/p')
-                if [ -n "$ts" ]; then
-                    [ -z "$first_timestamp" ] && first_timestamp="$ts"
-                    last_timestamp="$ts"
-                fi
-                
-                # Extract tool name
-                tool_name=$(echo "$line" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')
-                [ -n "$tool_name" ] && echo "$tool_name" >> "$tool_counts_file"
-                
-                # Count MCP services
-                case "$tool_name" in
-                    mcp__*)
-                        mcp_svc=$(echo "$tool_name" | sed 's/mcp__\([^_]*\).*/\1/')
-                        mcp_services_list="$mcp_services_list $mcp_svc"
-                        ;;
-                esac
-                ;;
-        esac
-        
-        # Count command calls in user messages
-        case "$line" in
-            *'"type":"message"'*'"role":"user"'*'<command-name>'*)
-                command_calls=$((command_calls + 1))
-                ;;
-        esac
-    done < "$transcript_path"
+    read -r input_tokens output_tokens tool_calls first_timestamp last_timestamp command_calls <<< "$jq_output"
     
     # Calculate duration
-    if [ -n "$first_timestamp" ] && [ -n "$last_timestamp" ]; then
+    if [ -n "$first_timestamp" ] && [ "$first_timestamp" != "0" ] && [ -n "$last_timestamp" ] && [ "$last_timestamp" != "0" ]; then
         total_api_duration_ms=$((last_timestamp - first_timestamp))
         [ "$total_api_duration_ms" -gt 0 ] && runtime=$(format_duration $((total_api_duration_ms / 1000)))
     fi
-    
-    # Count unique MCP services
-    if [ -n "$mcp_services_list" ]; then
-        mcp_services=$(echo "$mcp_services_list" | tr ' ' '\n' | sort -u | grep -c . || echo "0")
+    # Extract tool names for counting (only if we have tool calls)
+    if [ "$tool_calls" -gt 0 ]; then
+        jq -r 'select(.type == "function_call") | .name // empty' "$transcript_path" 2>/dev/null > "$tool_counts_file"
+        
+        # Count unique MCP services from tool names
+        if [ -s "$tool_counts_file" ]; then
+            mcp_count=$(grep '^mcp__' "$tool_counts_file" 2>/dev/null | wc -l | tr -d ' ')
+            [ -n "$mcp_count" ] && [ "$mcp_count" -gt 0 ] && mcp_services="$mcp_count"
+        fi
+    fi
+else
+    # Debug: show why we skipped parsing
+    if [ -z "$transcript_path" ] || [ "$transcript_path" = "null" ]; then
+        : # transcript_path is null or empty
+    elif [ ! -f "$transcript_path" ]; then
+        : # transcript file does not exist
     fi
 fi
 
-# Check if we're in a git repository
+# Check if we're in a git repository - optimized to reduce git command calls
 # Use current_dir if valid, otherwise fallback to current working directory
 git_work_dir="$current_dir"
 if [ "$current_dir" = "null" ] || [ "$current_dir" = "unknown" ] || [ ! -d "$current_dir" ]; then
@@ -152,30 +123,28 @@ git_info=""
 added_lines=""
 deleted_lines=""
 if git -C "$git_work_dir" rev-parse --git-dir > /dev/null 2>&1; then
-    # Get current branch name
-    branch=$(git -C "$git_work_dir" branch --show-current 2>/dev/null || echo "")
+    # Get branch name, commit hash, and check dirty status in one go
+    branch=$(git -C "$git_work_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    
     if [ -n "$branch" ]; then
-        # Get short commit hash (7 chars)
-        commit_hash=$(git -C "$git_work_dir" rev-parse --short=7 HEAD 2>/dev/null || echo "")
+        # Get commit hash and check if dirty in parallel using command substitution
+        commit_hash=$(git -C "$git_work_dir" rev-parse --short=7 HEAD 2>/dev/null)
+        dirty_status=$(git -C "$git_work_dir" status --porcelain 2>/dev/null)
         
-        # Check if working directory is dirty
-        if [ -z "$(git -C "$git_work_dir" status --porcelain 2>/dev/null)" ]; then
+        if [ -z "$dirty_status" ]; then
             # Clean state - show branch and hash
             git_info=" (${branch}@${commit_hash})"
         else
-            # Dirty state - show branch, hash, and dirty indicator
-            # Get added/deleted lines from git diff
-            git_stats=$(git -C "$git_work_dir" diff --numstat 2>/dev/null)
-            added_lines=""
-            deleted_lines=""
+            # Dirty state - calculate added/deleted lines efficiently
+            git_stats=$(git -C "$git_work_dir" diff --numstat 2>/dev/null | awk '{added+=$1; deleted+=$2} END {print (added+0) " " (deleted+0)}')
+            
             if [ -n "$git_stats" ]; then
-                added=$(echo "$git_stats" | awk '{added+=$1} END {print added+0}')
-                deleted=$(echo "$git_stats" | awk '{deleted+=$2} END {print deleted+0}')
+                read -r added deleted <<< "$git_stats"
                 # Only show if we have actual numbers > 0
-                if [ -n "$added" ] && [ "$added" -gt 0 ] 2>/dev/null; then
+                if [ "$added" -gt 0 ] 2>/dev/null; then
                     added_lines=" +${added}"
                 fi
-                if [ -n "$deleted" ] && [ "$deleted" -gt 0 ] 2>/dev/null; then
+                if [ "$deleted" -gt 0 ] 2>/dev/null; then
                     deleted_lines=" -${deleted}"
                 fi
             fi
