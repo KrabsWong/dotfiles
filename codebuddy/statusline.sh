@@ -1,22 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Read JSON input from stdin
-input=$(cat)
-
-# Extract information from the JSON input
-current_dir=$(echo "$input" | jq -r '.workspace.current_dir')
-dir_name=$(basename "$current_dir")
-model_display=$(echo "$input" | jq -r '.model.display_name')
-model_id=$(echo "$input" | jq -r '.model.id')
-session_id=$(echo "$input" | jq -r '.session_id')
-transcript_path=$(echo "$input" | jq -r '.transcript_path')
-
-# Extract cost statistics
-total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
-session_duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
-cost_lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-cost_lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
-api_duration_ms=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0')
+# Read JSON input from stdin and extract all fields in a single jq call
+read -r current_dir model_display model_id transcript_path < <(
+    jq -r '[.workspace.current_dir, .model.display_name, .model.id, .transcript_path] | @tsv' 2>/dev/null
+)
+dir_name=$(basename "$current_dir" 2>/dev/null || echo "unknown")
 
 # Function to format time duration
 format_duration() {
@@ -30,78 +18,169 @@ format_duration() {
     fi
 }
 
-# Function to format large numbers with suffix (K, M, B) - precise to 2 decimal places
+# Function to format large numbers with suffix (K, M, B) - using pure bash
 format_number() {
-    local number=$1
-    local abs_number=${number#-}
+    local number=${1:-0}
     
-    if (( $(echo "$abs_number >= 1000000000" | bc -l) )); then
-        printf "%.2fB" $(echo "$number / 1000000000" | bc -l)
-    elif (( $(echo "$abs_number >= 1000000" | bc -l) )); then
-        printf "%.2fM" $(echo "$number / 1000000" | bc -l)
-    elif (( $(echo "$abs_number >= 1000" | bc -l) )); then
-        printf "%.2fK" $(echo "$number / 1000" | bc -l)
+    # Handle non-numeric input
+    [[ ! "$number" =~ ^[0-9]+$ ]] && { echo "0"; return; }
+    
+    if [ "$number" -ge 1000000000 ]; then
+        local int_part=$((number / 1000000000))
+        local dec_part=$(( (number % 1000000000) / 10000000 ))
+        printf "%d.%02dB" "$int_part" "$dec_part"
+    elif [ "$number" -ge 1000000 ]; then
+        local int_part=$((number / 1000000))
+        local dec_part=$(( (number % 1000000) / 10000 ))
+        printf "%d.%02dM" "$int_part" "$dec_part"
+    elif [ "$number" -ge 1000 ]; then
+        local int_part=$((number / 1000))
+        local dec_part=$(( (number % 1000) / 10 ))
+        printf "%d.%02dK" "$int_part" "$dec_part"
     else
-        printf "%.0f" "$number"
+        printf "%d" "$number"
     fi
 }
 
-# Calculate session runtime from API duration
-if [ "$api_duration_ms" != "null" ] && [ "$api_duration_ms" != "0" ]; then
-    runtime=$(format_duration $((api_duration_ms / 1000)))
-else
-    # Fallback to tracking with session file
-    runtime="0s"
-    if [ -n "$session_id" ] && [ "$session_id" != "null" ]; then
-        session_file="/tmp/codebuddy_session_${session_id}.start"
-        if [ -f "$session_file" ]; then
-            start_time=$(cat "$session_file")
-            current_time=$(date +%s)
-            duration=$((current_time - start_time))
-            runtime=$(format_duration $duration)
-        else
-            # Record start time for future calls
-            echo "$(date +%s)" > "$session_file"
-            runtime="0s"
+# Extract project name for better identification
+project_name=""
+if [ -n "$current_dir" ] && [ "$current_dir" != "null" ] && [ "$current_dir" != "unknown" ]; then
+    # Try to get a more descriptive project name
+    parent_dir=$(dirname "$current_dir")
+    if [ "$parent_dir" != "/" ]; then
+        project_name=$(basename "$parent_dir")
+        if [ "$project_name" = "." ] || [ "$project_name" = ".." ]; then
+            project_name=""
         fi
     fi
 fi
 
-# Calculate total input and output tokens from transcript file
+# Create display identifier (removed session_id since model info is shared by design)
+display_identifier="$dir_name"
+if [ -n "$project_name" ] && [ "$project_name" != "$dir_name" ]; then
+    display_identifier="${project_name}/${dir_name}"
+fi
+
+# Initialize statistics
 input_tokens=0
 output_tokens=0
+total_api_duration_ms=0
+runtime="0s"
+tool_calls=0
+command_calls=0
+mcp_services=0
+
+# Temp file for tool counts (cleaned up at end)
+tool_counts_file=$(mktemp)
+trap "rm -f '$tool_counts_file'" EXIT
+
+# Parse transcript file once and extract all needed data
 if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$transcript_path" ]; then
-    # Extract all inputTokens and outputTokens from transcript and sum them up
-    input_tokens=$(cat "$transcript_path" | grep -o '"inputTokens":[0-9]*' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum+0}')
-    output_tokens=$(cat "$transcript_path" | grep -o '"outputTokens":[0-9]*' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum+0}')
+    # Read file once into memory for processing
+    first_timestamp=""
+    last_timestamp=""
+    
+    while IFS= read -r line; do
+        # Extract tokens (using sed for bash 3 compatibility)
+        case "$line" in
+            *'"inputTokens":'*)
+                val=$(echo "$line" | sed -n 's/.*"inputTokens":\([0-9]*\).*/\1/p')
+                [ -n "$val" ] && input_tokens=$((input_tokens + val))
+                ;;
+        esac
+        case "$line" in
+            *'"outputTokens":'*)
+                val=$(echo "$line" | sed -n 's/.*"outputTokens":\([0-9]*\).*/\1/p')
+                [ -n "$val" ] && output_tokens=$((output_tokens + val))
+                ;;
+        esac
+        
+        # Process function calls
+        case "$line" in
+            *'"type":"function_call"'*)
+                tool_calls=$((tool_calls + 1))
+                
+                # Extract timestamp
+                ts=$(echo "$line" | sed -n 's/.*"timestamp":\([0-9]*\).*/\1/p')
+                if [ -n "$ts" ]; then
+                    [ -z "$first_timestamp" ] && first_timestamp="$ts"
+                    last_timestamp="$ts"
+                fi
+                
+                # Extract tool name
+                tool_name=$(echo "$line" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')
+                [ -n "$tool_name" ] && echo "$tool_name" >> "$tool_counts_file"
+                
+                # Count MCP services
+                case "$tool_name" in
+                    mcp__*)
+                        mcp_svc=$(echo "$tool_name" | sed 's/mcp__\([^_]*\).*/\1/')
+                        mcp_services_list="$mcp_services_list $mcp_svc"
+                        ;;
+                esac
+                ;;
+        esac
+        
+        # Count command calls in user messages
+        case "$line" in
+            *'"type":"message"'*'"role":"user"'*'<command-name>'*)
+                command_calls=$((command_calls + 1))
+                ;;
+        esac
+    done < "$transcript_path"
+    
+    # Calculate duration
+    if [ -n "$first_timestamp" ] && [ -n "$last_timestamp" ]; then
+        total_api_duration_ms=$((last_timestamp - first_timestamp))
+        [ "$total_api_duration_ms" -gt 0 ] && runtime=$(format_duration $((total_api_duration_ms / 1000)))
+    fi
+    
+    # Count unique MCP services
+    if [ -n "$mcp_services_list" ]; then
+        mcp_services=$(echo "$mcp_services_list" | tr ' ' '\n' | sort -u | grep -c . || echo "0")
+    fi
 fi
 
 # Check if we're in a git repository
+# Use current_dir if valid, otherwise fallback to current working directory
+git_work_dir="$current_dir"
+if [ "$current_dir" = "null" ] || [ "$current_dir" = "unknown" ] || [ ! -d "$current_dir" ]; then
+    git_work_dir="$(pwd)"
+fi
+
 git_info=""
 added_lines=""
 deleted_lines=""
-if git -C "$current_dir" rev-parse --git-dir > /dev/null 2>&1; then
+if git -C "$git_work_dir" rev-parse --git-dir > /dev/null 2>&1; then
     # Get current branch name
-    branch=$(git -C "$current_dir" branch --show-current 2>/dev/null || echo "")
+    branch=$(git -C "$git_work_dir" branch --show-current 2>/dev/null || echo "")
     if [ -n "$branch" ]; then
+        # Get short commit hash (7 chars)
+        commit_hash=$(git -C "$git_work_dir" rev-parse --short=7 HEAD 2>/dev/null || echo "")
+        
         # Check if working directory is dirty
-        if [ -z "$(git -C "$current_dir" status --porcelain --no-optional-locks 2>/dev/null)" ]; then
-            # Clean state
-            git_info=" (${branch})"
+        if [ -z "$(git -C "$git_work_dir" status --porcelain 2>/dev/null)" ]; then
+            # Clean state - show branch and hash
+            git_info=" (${branch}@${commit_hash})"
         else
-            # Dirty state
-            git_info=" (${branch}) ✗"
-
+            # Dirty state - show branch, hash, and dirty indicator
             # Get added/deleted lines from git diff
-            git_stats=$(git -C "$current_dir" diff --numstat --no-optional-locks 2>/dev/null)
+            git_stats=$(git -C "$git_work_dir" diff --numstat 2>/dev/null)
+            added_lines=""
+            deleted_lines=""
             if [ -n "$git_stats" ]; then
-                added=$(echo "$git_stats" | awk '{added+=$1} END {print added}')
-                deleted=$(echo "$git_stats" | awk '{deleted+=$2} END {print deleted}')
-                if [ "$added" -gt 0 ] || [ "$deleted" -gt 0 ]; then
+                added=$(echo "$git_stats" | awk '{added+=$1} END {print added+0}')
+                deleted=$(echo "$git_stats" | awk '{deleted+=$2} END {print deleted+0}')
+                # Only show if we have actual numbers > 0
+                if [ -n "$added" ] && [ "$added" -gt 0 ] 2>/dev/null; then
                     added_lines=" +${added}"
+                fi
+                if [ -n "$deleted" ] && [ "$deleted" -gt 0 ] 2>/dev/null; then
                     deleted_lines=" -${deleted}"
                 fi
             fi
+            # Combine git info with change stats
+            git_info=" (${branch}@${commit_hash}${added_lines}${deleted_lines}) ✗"
         fi
     fi
 fi
@@ -109,19 +188,22 @@ fi
 # Build model display (shorten if needed)
 model_short="$model_display"
 if [ "$model_display" != "$model_id" ] && [ ${#model_display} -gt 15 ]; then
-    # Use the ID if display name is too long
+    # Use ID if display name is too long
     model_short="$model_id"
 fi
+
+# Use display identifier for showing directory info
+display_dir="$display_identifier"
 
 # Format token numbers with suffix
 input_tokens_formatted=$(format_number $input_tokens)
 output_tokens_formatted=$(format_number $output_tokens)
 
-# Build the status line with proper formatting
+# Build status line with proper formatting
 # Using printf with %b to interpret escape sequences
-# Build each part with separator included
+# All information in a single line for CodeBuddy compatibility
 
-status_line="\\033[1;32m➜\\033[0m \\033[0;36m${dir_name}\\033[0m${git_info}"
+status_line="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
 
 # Add separator and model info
 status_line="${status_line} | \\033[0;33m${model_short}\\033[0m"
@@ -129,16 +211,61 @@ status_line="${status_line} | \\033[0;33m${model_short}\\033[0m"
 # Add separator and runtime
 status_line="${status_line} | \\033[0;34m⏰${runtime}\\033[0m"
 
-# Add separator and git line changes (if any)
-if [ -n "$added_lines" ] || [ -n "$deleted_lines" ]; then
-    status_line="${status_line} | \\033[0;32m${added_lines}\\033[0m\\033[0;31m${deleted_lines}\\033[0m"
+# Add combined tokens (in/out)
+status_line="${status_line}(\\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\\033[0m)"
+
+# Add tool statistics in compact format (if any)
+if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
+    # Build compact tool usage string
+    # Format: Tool abbreviation + count (e.g., B99 R31 E23)
+    tool_compact_str=""
+    
+    # Get tool abbreviation
+    get_abbrev() {
+        case "$1" in
+            Bash) echo "Bash" ;;
+            Read) echo "Read" ;;
+            Write) echo "Write" ;;
+            Edit) echo "Edit" ;;
+            MultiEdit) echo "ME" ;;
+            TodoWrite) echo "Todo" ;;
+            Grep) echo "Grep" ;;
+            Glob) echo "Glob" ;;
+            WebFetch) echo "WebF" ;;
+            WebSearch) echo "WebS" ;;
+            Task) echo "Task" ;;
+            AskUserQuestion) echo "Q" ;;
+            NotebookEdit) echo "NE" ;;
+            *) echo "$(echo "$1" | cut -c1)" ;;  # First char as fallback
+        esac
+    }
+    
+    # Count and sort tools by frequency
+    sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
+        abbrev=$(get_abbrev "$name")
+        if [ -z "$tool_compact_str" ]; then
+            tool_compact_str="${abbrev}:${count}"
+        else
+            tool_compact_str="${tool_compact_str} ${abbrev}:${count}"
+        fi
+        echo "$tool_compact_str"
+    done | tail -1 > "${tool_counts_file}.out"
+    
+    tool_compact_str=$(cat "${tool_counts_file}.out" 2>/dev/null)
+    rm -f "${tool_counts_file}.out"
+    
+    [ -n "$tool_compact_str" ] && status_line="${status_line} | 🔧${tool_compact_str}"
 fi
 
-# Add separator and input tokens
-status_line="${status_line} | \\033[0;35min:${input_tokens_formatted}\\033[0m"
+# Add MCP services count (if any)
+if [ "$mcp_services" -gt 0 ]; then
+    status_line="${status_line} \\033[0;90m🔌${mcp_services}\\033[0m"
+fi
 
-# Add separator and output tokens
-status_line="${status_line} | \\033[0;35mout:${output_tokens_formatted}\\033[0m"
+# Add command calls count (if any)
+if [ "$command_calls" -gt 0 ]; then
+    status_line="${status_line} \\033[0;90m⚡${command_calls}\\033[0m"
+fi
 
-# Print the status line with %b to interpret escape sequences
+# Print status line with %b to interpret escape sequences
 printf "%b" "$status_line"
