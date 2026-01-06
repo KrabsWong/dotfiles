@@ -122,6 +122,7 @@ fi
 git_info=""
 added_lines=""
 deleted_lines=""
+untracked_info=""
 if git -C "$git_work_dir" rev-parse --git-dir > /dev/null 2>&1; then
     # Get branch name, commit hash, and check dirty status in one go
     branch=$(git -C "$git_work_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -148,8 +149,15 @@ if git -C "$git_work_dir" rev-parse --git-dir > /dev/null 2>&1; then
                     deleted_lines=" -${deleted}"
                 fi
             fi
+            
+            # Count untracked files (status code "??")
+            untracked_count=$(echo "$dirty_status" | grep -c "^??" 2>/dev/null || echo "0")
+            if [ "$untracked_count" -gt 0 ] 2>/dev/null; then
+                untracked_info=" ?${untracked_count}"
+            fi
+            
             # Combine git info with change stats
-            git_info=" (${branch}@${commit_hash}${added_lines}${deleted_lines}) ✗"
+            git_info=" (${branch}@${commit_hash}${added_lines}${deleted_lines}${untracked_info}) ✗"
         fi
     fi
 fi
