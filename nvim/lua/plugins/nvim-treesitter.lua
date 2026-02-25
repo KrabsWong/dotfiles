@@ -3,7 +3,7 @@ return {
   build = ":TSUpdate",
   event = { "BufReadPost", "BufNewFile" },
   config = function ()
-    local configs = require("nvim-treesitter.configs")
+    local configs = require("nvim-treesitter")
 
     configs.setup({
       ensure_installed = { "lua", "vim", "vimdoc", "javascript", "html", "css", "vue", "typescript" },
