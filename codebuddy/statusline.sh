@@ -1,5 +1,60 @@
 #!/usr/bin/env bash
 
+# Cache directory and file for model context data
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/codebuddy"
+CACHE_FILE="$CACHE_DIR/models_context.json"
+CACHE_TTL=86400  # 24 hours in seconds
+
+# Function to get context window size from models.dev API
+get_context_window() {
+    local model_id="$1"
+    local context_size=""
+    local cache_valid=false
+
+    # Check if cache exists and is valid
+    if [ -f "$CACHE_FILE" ]; then
+        local cache_age=$(($(date +%s) - $(stat -f%m "$CACHE_FILE" 2>/dev/null || stat -c%Y "$CACHE_FILE" 2>/dev/null || echo 0)))
+        if [ "$cache_age" -lt "$CACHE_TTL" ]; then
+            cache_valid=true
+        fi
+    fi
+
+    # Try to get context from cache first
+    if [ "$cache_valid" = true ] && [ -f "$CACHE_FILE" ]; then
+        context_size=$(jq -r --arg model "$model_id" '
+            to_entries[] | 
+            select(.value.models[$model].limit.context != null) | 
+            .value.models[$model].limit.context
+        ' "$CACHE_FILE" 2>/dev/null | head -1)
+    fi
+
+    # If not in cache, fetch from API
+    if [ -z "$context_size" ] || [ "$context_size" = "null" ]; then
+        # Create cache directory if needed
+        mkdir -p "$CACHE_DIR"
+
+        # Fetch and cache the API data
+        local api_data=$(curl -s "https://models.dev/api.json" 2>/dev/null)
+        if [ -n "$api_data" ]; then
+            echo "$api_data" > "$CACHE_FILE"
+
+            # Extract context size for the model
+            context_size=$(echo "$api_data" | jq -r --arg model "$model_id" '
+                to_entries[] | 
+                select(.value.models[$model].limit.context != null) | 
+                .value.models[$model].limit.context
+            ' 2>/dev/null | head -1)
+        fi
+    fi
+
+    # Return context size or default fallback
+    if [ -n "$context_size" ] && [ "$context_size" != "null" ]; then
+        echo "$context_size"
+    else
+        echo "128000"  # Default fallback
+    fi
+}
+
 # Read JSON input from stdin and extract all fields in a single jq call
 read -r current_dir model_display model_id transcript_path < <(
     jq -r '[.workspace.current_dir, .model.display_name, .model.id, .transcript_path] | @tsv' 2>/dev/null
@@ -76,10 +131,9 @@ trap "rm -f '$tool_counts_file'" EXIT
 
 # Parse transcript file (now .jsonl format) once and extract all needed data using jq for better performance
 if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$transcript_path" ]; then
-    # Use jq with -s to read all lines and extract all statistics in a single pass
     jq_output=$(jq -r -s '{
-      input_tokens: map(.providerData.usage.inputTokens // 0) | add,
-      output_tokens: map(.providerData.usage.outputTokens // 0) | add,
+      input_tokens: map(.providerData.usage.inputTokens // .tokens.input // 0) | max,
+      output_tokens: map(.providerData.usage.outputTokens // .tokens.output // 0) | max,
       tool_calls: map(select(.type == "function_call")) | length,
       first_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | min),
       last_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | max),
@@ -176,6 +230,46 @@ display_dir="$display_identifier"
 input_tokens_formatted=$(format_number $input_tokens)
 output_tokens_formatted=$(format_number $output_tokens)
 
+# Calculate context window usage percentage
+total_tokens=$((input_tokens + output_tokens))
+context_window=$(get_context_window "$model_id")
+context_percentage=$((total_tokens * 100 / context_window))
+
+# Determine color based on usage level
+get_context_color() {
+    local pct=$1
+    if [ "$pct" -ge 90 ]; then
+        echo "\033[0;31m"  # Red - critical
+    elif [ "$pct" -ge 75 ]; then
+        echo "\033[0;33m"  # Yellow - warning
+    else
+        echo "\033[0;32m"  # Green - normal
+    fi
+}
+context_color=$(get_context_color $context_percentage)
+
+# Build visual progress bar for context usage
+build_progress_bar() {
+    local pct=$1
+    local width=8
+    local filled=$((pct * width / 100))
+    local empty=$((width - filled))
+    local bar=""
+    
+    # Build filled portion
+    for ((i=0; i<filled; i++)); do
+        bar="${bar}█"
+    done
+    
+    # Build empty portion
+    for ((i=0; i<empty; i++)); do
+        bar="${bar}░"
+    done
+    
+    echo "[${bar}]"
+}
+context_bar=$(build_progress_bar $context_percentage)
+
 # Build status line with proper formatting
 # Using printf with %b to interpret escape sequences
 # All information in a single line for CodeBuddy compatibility
@@ -186,10 +280,11 @@ status_line="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}
 status_line="${status_line} | \\033[0;33m${model_short}\\033[0m"
 
 # Add separator and runtime
-status_line="${status_line} | \\033[0;34m⏰${runtime}\\033[0m"
+status_line="${status_line} | \033[0;34m⏰${runtime}\033[0m"
 
-# Add combined tokens (in/out)
-status_line="${status_line}(\\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\\033[0m)"
+# Add combined tokens (in/out) with context progress bar and percentage
+status_line="${status_line}(\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\033[0m)"
+status_line="${status_line}${context_color}${context_bar}${context_percentage}%\033[0m"
 
 # Add tool statistics in compact format (if any)
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
