@@ -270,18 +270,6 @@ build_progress_bar() {
 }
 context_bar=$(build_progress_bar $context_percentage)
 
-# Build status line with proper formatting
-# Using printf with %b to interpret escape sequences
-# All information in a single line for CodeBuddy compatibility
-
-status_line="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
-
-# Add separator and model info
-status_line="${status_line} | \\033[0;33m${model_short}\\033[0m"
-
-# Add separator and runtime
-status_line="${status_line} | \033[0;34m⏰${runtime}\033[0m"
-
 # Format context window size for display
 format_context_window() {
     local size=$1
@@ -295,17 +283,11 @@ format_context_window() {
 }
 context_window_formatted=$(format_context_window $context_window)
 
-# Add combined tokens (in/out) with context progress bar, percentage and window size
-status_line="${status_line}(\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\033[0m)"
-status_line="${status_line}${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\033[0m"
-
-# Add tool statistics in compact format (if any)
+# Build tool statistics string (if any)
+tool_stats=""
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
-    # Build compact tool usage string
-    # Format: Tool abbreviation + count (e.g., B99 R31 E23)
     tool_compact_str=""
     
-    # Get tool abbreviation
     get_abbrev() {
         case "$1" in
             Bash) echo "Bash" ;;
@@ -321,11 +303,10 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
             Task) echo "Task" ;;
             AskUserQuestion) echo "Q" ;;
             NotebookEdit) echo "NE" ;;
-            *) echo "$(echo "$1" | cut -c1)" ;;  # First char as fallback
+            *) echo "$(echo "$1" | cut -c1)" ;;
         esac
     }
     
-    # Count and sort tools by frequency
     sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
         abbrev=$(get_abbrev "$name")
         if [ -z "$tool_compact_str" ]; then
@@ -339,39 +320,28 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=$(cat "${tool_counts_file}.out" 2>/dev/null)
     rm -f "${tool_counts_file}.out"
     
-    [ -n "$tool_compact_str" ] && status_line="${status_line} | 🔧${tool_compact_str}"
+    [ -n "$tool_compact_str" ] && tool_stats=" | 🔧${tool_compact_str}"
 fi
 
-# Add MCP services count (if any)
+# Add MCP services count
 if [ "$mcp_services" -gt 0 ]; then
-    status_line="${status_line} \\033[0;90m🔌${mcp_services}\\033[0m"
+    tool_stats="${tool_stats} \\033[0;90m🔌${mcp_services}\\033[0m"
 fi
 
-# Add command calls count (if any)
+# Add command calls count
 if [ "$command_calls" -gt 0 ]; then
-    status_line="${status_line} \\033[0;90m⚡${command_calls}\\033[0m"
+    tool_stats="${tool_stats} \\033[0;90m⚡${command_calls}\\033[0m"
 fi
 
-# Two-line mode: Set STATUSLINE_TWO_LINE=1 to enable
-if [ "${STATUSLINE_TWO_LINE:-0}" = "1" ]; then
-    line1="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
-    line1="${line1} | \\033[0;33m${model_short}\\033[0m"
-    line1="${line1} | \\033[0;34m⏰${runtime}\\033[0m"
-    
-    line2="  \\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\\033[0m"
-    line2="${line2} ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
-    
-    if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
-        line2="${line2} | 🔧${tool_compact_str}"
-    fi
-    if [ "$mcp_services" -gt 0 ]; then
-        line2="${line2} \\033[0;90m🔌${mcp_services}\\033[0m"
-    fi
-    if [ "$command_calls" -gt 0 ]; then
-        line2="${line2} \\033[0;90m⚡${command_calls}\\033[0m"
-    fi
-    
-    printf "%b\n%b" "$line1" "$line2"
-else
-    printf "%b" "$status_line"
-fi
+# Two-line display (default)
+# Line 1: directory, git, model
+line1="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
+line1="${line1} | \\033[0;33m${model_short}\\033[0m"
+
+# Line 2: session time, tokens, context bar with percentage and window size, tools
+line2="\\033[0;34m⏰${runtime}\\033[0m"
+line2="${line2} | \\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\\033[0m"
+line2="${line2} ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
+line2="${line2}${tool_stats}"
+
+printf "%b\n%b" "$line1" "$line2"
