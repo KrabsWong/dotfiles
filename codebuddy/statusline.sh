@@ -337,9 +337,9 @@ line1="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
 line1="${line1} | \\033[0;33m${model_short}\\033[0m"
 
 line2="\\033[0;34m⏱️${runtime}\\033[0m"
-line2="${line2} | 📥\\033[0;35m${input_tokens_formatted}\\033[0m"
-line2="${line2} | 📤\\033[0;35m${output_tokens_formatted}\\033[0m"
-line2="${line2} ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
+line2="${line2} | ⬆️\\033[0;35m${input_tokens_formatted}\\033[0m"
+line2="${line2} | ⬇️\\033[0;35m${output_tokens_formatted}\\033[0m"
+line2="${line2} | ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
 line2="${line2}${tool_stats}"
 
 printf "%b\n%b" "$line1" "$line2"
