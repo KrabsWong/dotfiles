@@ -130,25 +130,41 @@ tool_counts_file=$(mktemp)
 trap "rm -f '$tool_counts_file'" EXIT
 
 # Parse transcript file (now .jsonl format) once and extract all needed data using jq for better performance
+# Handle compact operation: if transcript contains "Compact Instructions", only count token usage after the last compact
+# Note: tool_calls, session time, and command_calls keep global statistics (not reset by compact)
 if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$transcript_path" ]; then
-    jq_output=$(jq -r -s '{
-      input_tokens: map(.providerData.usage.inputTokens // .tokens.input // 0) | max,
-      output_tokens: map(.providerData.usage.outputTokens // .tokens.output // 0) | max,
-      tool_calls: map(select(.type == "function_call")) | length,
-      first_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | min),
-      last_ts: (map(select(.type == "function_call")) | map(.timestamp // 0) | max),
-      command_calls: map(select(.type == "message" and .role == "user" and (.content | tostring | contains("<command-name>")))) | length
-    } | to_entries | map(.value) | @tsv' "$transcript_path" 2>/dev/null || echo "0	0	0	0	0	0")
+    jq_output=$(jq -r -s '
+      # Store all records
+      . as $all |
+      
+      # Find the timestamp of the last compact operation (message containing "Compact Instructions")
+      ([$all[] | select(.type == "message" and .role == "user" and (.content[0].text | contains("Compact Instructions"))) | .timestamp] | max // 0) as $last_compact_ts |
+      
+      # Filter records after compact (or all records if no compact) - only for token calculation
+      (if $last_compact_ts > 0 then [$all[] | select(.timestamp > $last_compact_ts)] else $all end) as $records_after_compact |
+      
+      # Calculate stats:
+      # - token stats use records_after_compact (reset by compact)
+      # - tool_calls, session time, command_calls use $all (global stats)
+      {
+        input_tokens: ($records_after_compact | map(.providerData.usage.inputTokens // .tokens.input // 0) | max // 0),
+        output_tokens: ($records_after_compact | map(.providerData.usage.outputTokens // .tokens.output // 0) | max // 0),
+        tool_calls: ($all | map(select(.type == "function_call")) | length),
+        first_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | min // 0),
+        last_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | max // 0),
+        command_calls: ($all | map(select(.type == "message" and .role == "user" and (.content | tostring | contains("<command-name>")))) | length)
+      } | to_entries | map(.value) | @tsv' "$transcript_path" 2>/dev/null || echo "0	0	0	0	0	0")
     
     read -r input_tokens output_tokens tool_calls first_timestamp last_timestamp command_calls <<< "$jq_output"
     
-    # Calculate duration
+    # Calculate duration (global, not affected by compact)
     if [ -n "$first_timestamp" ] && [ "$first_timestamp" != "0" ] && [ -n "$last_timestamp" ] && [ "$last_timestamp" != "0" ]; then
         total_api_duration_ms=$((last_timestamp - first_timestamp))
         [ "$total_api_duration_ms" -gt 0 ] && runtime=$(format_duration $((total_api_duration_ms / 1000)))
     fi
-    # Extract tool names for counting (only if we have tool calls)
+    # Extract tool names for counting (global stats, not affected by compact)
     if [ "$tool_calls" -gt 0 ]; then
+        # Count all tool calls (global, not reset by compact)
         jq -r 'select(.type == "function_call") | .name // empty' "$transcript_path" 2>/dev/null > "$tool_counts_file"
         
         # Count unique MCP services from tool names
