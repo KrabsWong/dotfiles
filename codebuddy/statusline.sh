@@ -282,9 +282,22 @@ status_line="${status_line} | \\033[0;33m${model_short}\\033[0m"
 # Add separator and runtime
 status_line="${status_line} | \033[0;34m⏰${runtime}\033[0m"
 
-# Add combined tokens (in/out) with context progress bar and percentage
+# Format context window size for display
+format_context_window() {
+    local size=$1
+    if [ "$size" -ge 1000000 ]; then
+        echo "$((size / 1000000))M"
+    elif [ "$size" -ge 1000 ]; then
+        echo "$((size / 1000))K"
+    else
+        echo "$size"
+    fi
+}
+context_window_formatted=$(format_context_window $context_window)
+
+# Add combined tokens (in/out) with context progress bar, percentage and window size
 status_line="${status_line}(\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\033[0m)"
-status_line="${status_line}${context_color}${context_bar}${context_percentage}%\033[0m"
+status_line="${status_line}${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\033[0m"
 
 # Add tool statistics in compact format (if any)
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
@@ -339,5 +352,26 @@ if [ "$command_calls" -gt 0 ]; then
     status_line="${status_line} \\033[0;90m⚡${command_calls}\\033[0m"
 fi
 
-# Print status line with %b to interpret escape sequences
-printf "%b" "$status_line"
+# Two-line mode: Set STATUSLINE_TWO_LINE=1 to enable
+if [ "${STATUSLINE_TWO_LINE:-0}" = "1" ]; then
+    line1="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
+    line1="${line1} | \\033[0;33m${model_short}\\033[0m"
+    line1="${line1} | \\033[0;34m⏰${runtime}\\033[0m"
+    
+    line2="  \\033[0;35m${input_tokens_formatted}/${output_tokens_formatted}\\033[0m"
+    line2="${line2} ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
+    
+    if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
+        line2="${line2} | 🔧${tool_compact_str}"
+    fi
+    if [ "$mcp_services" -gt 0 ]; then
+        line2="${line2} \\033[0;90m🔌${mcp_services}\\033[0m"
+    fi
+    if [ "$command_calls" -gt 0 ]; then
+        line2="${line2} \\033[0;90m⚡${command_calls}\\033[0m"
+    fi
+    
+    printf "%b\n%b" "$line1" "$line2"
+else
+    printf "%b" "$status_line"
+fi
