@@ -357,14 +357,43 @@ if [ "$command_calls" -gt 0 ]; then
     tool_stats="${tool_stats} ⚡${command_calls}"
 fi
 
-# Two-line display (default)
-# Line 1: directory, git, model
-line1="\\033[1;32m➜\\033[0m \\033[0;36m${display_dir}\\033[0m${git_info}"
-line1="${line1} | \\033[0;33m${model_short}\\033[0m"
+# Single-line display inspired by cship/starship
+# Format: 🤖 model | ⏱️ time | 📊 tokens ↑↓ | [context_bar] | 🔧 tools | 📁 directory/git
 
-line2="\\033[0;34m⏱️${runtime}\\033[0m"
-line2="${line2} | ↑\\033[0;35m${input_tokens_formatted}\\033[0m ↓\\033[0;35m${output_tokens_formatted}\\033[0m"
-line2="${line2} | ${context_color}${context_bar}${context_percentage}%(${context_window_formatted})\\033[0m"
-line2="${line2}${tool_stats}"
+# Build sections
+section_model="\\033[1;36m🤖 ${model_short}\\033[0m"
+section_time="\\033[0;34m⏱️ ${runtime}\\033[0m"
+section_tokens="\\033[0;35m📊 ↑${input_tokens_formatted} ↓${output_tokens_formatted}\\033[0m"
+section_context="${context_color}${context_bar} ${context_percentage}%\\033[0m"
 
-printf "%b\n%b" "$line1" "$line2"
+# Compact git info - reuse existing git_info but simplify
+if [ -n "$git_info" ]; then
+    # Extract just branch name from git_info (remove hash and stats)
+    git_branch_clean=$(echo "$git_info" | sed -E 's/.*\(([a-zA-Z0-9_-]+).*/\1/')
+    if echo "$git_info" | grep -q "✗"; then
+        git_compact=" \\033[0;33m(${git_branch_clean}*)\\033[0m"
+    else
+        git_compact=" \\033[0;32m(${git_branch_clean})\\033[0m"
+    fi
+else
+    git_compact=""
+fi
+
+section_dir="\\033[0;36m📁 ${display_dir}\\033[0m${git_compact}"
+
+# Combine all sections with separators
+statusline="${section_model} │ ${section_time} │ ${section_tokens} │ ${section_context}"
+
+# Add tool stats if present
+if [ -n "$tool_stats" ]; then
+    # Clean up tool stats format (remove leading " | ")
+    clean_tool_stats=$(echo "$tool_stats" | sed 's/^ | //')
+    if [ -n "$clean_tool_stats" ]; then
+        statusline="${statusline} │ \\033[0;33m🔧 ${clean_tool_stats}\\033[0m"
+    fi
+fi
+
+# Add directory at the end
+statusline="${statusline} │ ${section_dir}"
+
+printf "%b\n" "${statusline}"
