@@ -292,7 +292,7 @@ build_progress_bar() {
         bar="${bar}░"
     done
     
-    echo "[${bar}]"
+    echo "${bar}"
 }
 context_bar=$(build_progress_bar $context_percentage)
 
@@ -364,7 +364,7 @@ fi
 section_model="\\033[1;36m🤖 ${model_short}\\033[0m"
 section_time="\\033[0;34m⏱️ ${runtime}\\033[0m"
 section_tokens="\\033[0;35m📊 ↑${input_tokens_formatted} ↓${output_tokens_formatted}\\033[0m"
-section_context="${context_color}${context_bar} ${context_percentage}%\\033[0m"
+section_context="${context_color}${context_bar}${context_percentage}%\\033[0m"
 
 # Compact git info - reuse existing git_info but simplify
 if [ -n "$git_info" ]; then
