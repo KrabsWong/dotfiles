@@ -133,22 +133,32 @@ trap "rm -f '$tool_counts_file'" EXIT
 # Handle compact operation: if transcript contains "Compact Instructions", only count token usage after the last compact
 # Note: tool_calls, session time, and command_calls keep global statistics (not reset by compact)
 if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$transcript_path" ]; then
-    jq_output=$(jq -r -s '
-      # Store all records
+    # First, find the last compact timestamp
+    last_compact_ts=$(jq -r '[.[] | select(.type == "message" and .role == "user" and (.content[0].text | contains("Compact Instructions"))) | .timestamp] | max // empty' "$transcript_path" 2>/dev/null)
+
+    # Get token metrics from the most recent assistant message
+    # Use --arg to pass the compact timestamp to jq
+    jq_output=$(jq -r -s --arg compact_ts "$last_compact_ts" '
       . as $all |
-      
-      # Find the timestamp of the last compact operation (message containing "Compact Instructions")
-      ([$all[] | select(.type == "message" and .role == "user" and (.content[0].text | contains("Compact Instructions"))) | .timestamp] | max // 0) as $last_compact_ts |
-      
-      # Filter records after compact (or all records if no compact) - only for token calculation
-      (if $last_compact_ts > 0 then [$all[] | select(.timestamp > $last_compact_ts)] else $all end) as $records_after_compact |
-      
-      # Calculate stats:
-      # - token stats use records_after_compact (reset by compact)
-      # - tool_calls, session time, command_calls use $all (global stats)
+
+      # Filter records after compact (or all records if no compact)
+      (if $compact_ts != "" and $compact_ts != "null" then
+         [$all[] | select(.timestamp > $compact_ts)]
+       else
+         $all
+       end) as $records_after_compact |
+
+      # Get the most recent main chain assistant message with non-zero usage data
+      ($records_after_compact |
+        map(select(.isSidechain != true and .type == "assistant" and .message.usage != null and
+                   ((.message.usage.input_tokens // 0) > 0 or (.message.usage.output_tokens // 0) > 0))) |
+        sort_by(.timestamp) |
+        last // {message: {usage: {input_tokens: 0, output_tokens: 0}}}) as $latest_message |
+
+      # Calculate stats
       {
-        input_tokens: ($records_after_compact | map(.providerData.usage.inputTokens // .tokens.input // 0) | max // 0),
-        output_tokens: ($records_after_compact | map(.providerData.usage.outputTokens // .tokens.output // 0) | max // 0),
+        input_tokens: ($latest_message.message.usage.input_tokens // 0),
+        output_tokens: ($latest_message.message.usage.output_tokens // 0),
         tool_calls: ($all | map(select(.type == "function_call")) | length),
         first_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | min // 0),
         last_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | max // 0),
@@ -299,30 +309,30 @@ format_context_window() {
 }
 context_window_formatted=$(format_context_window $context_window)
 
+# Tool name abbreviation function
+get_abbrev() {
+    if [ "$1" = "Bash" ]; then echo "Bash"
+    elif [ "$1" = "Read" ]; then echo "Read"
+    elif [ "$1" = "Write" ]; then echo "Write"
+    elif [ "$1" = "Edit" ]; then echo "Edit"
+    elif [ "$1" = "MultiEdit" ]; then echo "ME"
+    elif [ "$1" = "TodoWrite" ]; then echo "Todo"
+    elif [ "$1" = "Grep" ]; then echo "Grep"
+    elif [ "$1" = "Glob" ]; then echo "Glob"
+    elif [ "$1" = "WebFetch" ]; then echo "WebF"
+    elif [ "$1" = "WebSearch" ]; then echo "WebS"
+    elif [ "$1" = "Task" ]; then echo "Task"
+    elif [ "$1" = "AskUserQuestion" ]; then echo "Q"
+    elif [ "$1" = "NotebookEdit" ]; then echo "NE"
+    else echo "$(echo "$1" | cut -c1)"
+    fi
+}
+
 # Build tool statistics string (if any)
 tool_stats=""
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=""
-    
-    get_abbrev() {
-        case "$1" in
-            Bash) echo "Bash" ;;
-            Read) echo "Read" ;;
-            Write) echo "Write" ;;
-            Edit) echo "Edit" ;;
-            MultiEdit) echo "ME" ;;
-            TodoWrite) echo "Todo" ;;
-            Grep) echo "Grep" ;;
-            Glob) echo "Glob" ;;
-            WebFetch) echo "WebF" ;;
-            WebSearch) echo "WebS" ;;
-            Task) echo "Task" ;;
-            AskUserQuestion) echo "Q" ;;
-            NotebookEdit) echo "NE" ;;
-            *) echo "$(echo "$1" | cut -c1)" ;;
-        esac
-    }
-    
+
     sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
         abbrev=$(get_abbrev "$name")
         if [ -z "$tool_compact_str" ]; then
