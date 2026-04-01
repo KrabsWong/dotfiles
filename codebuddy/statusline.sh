@@ -274,17 +274,17 @@ get_context_color() {
 }
 context_color=$(get_context_color $context_percentage)
 
-# Build visual progress bar for context usage (half-height blocks)
+# Build visual progress bar for context usage
 build_progress_bar() {
     local pct=$1
-    local width=10
+    local width=8
     local filled=$((pct * width / 100))
     local empty=$((width - filled))
     local bar=""
 
-    # Build filled portion with half-height blocks (▄)
+    # Build filled portion
     for ((i=0; i<filled; i++)); do
-        bar="${bar}▄"
+        bar="${bar}█"
     done
 
     # Build empty portion
