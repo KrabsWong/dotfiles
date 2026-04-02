@@ -292,34 +292,41 @@ get_tool_display() {
 }
 
 # Build tool statistics string (if any)
+# Show tools with count > 1 individually, fold count=1 tools into "+N others"
 tool_stats=""
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=""
+    others_count=0
 
     sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
-        display_name=$(get_tool_display "$name")
-        # Muted name, bold bright count for emphasis
-        entry="\\033[0;37m${display_name}:\\033[1;33m${count}\\033[0m"
-        if [ -z "$tool_compact_str" ]; then
-            tool_compact_str="${entry}"
+        if [ "$count" -gt 1 ]; then
+            display_name=$(get_tool_display "$name")
+            entry="\\033[0;37m${display_name}:\\033[1;33m${count}\\033[0m"
+            if [ -z "$tool_compact_str" ]; then
+                tool_compact_str="${entry}"
+            else
+                tool_compact_str="${tool_compact_str} ${entry}"
+            fi
         else
-            tool_compact_str="${tool_compact_str} ${entry}"
+            others_count=$((others_count + 1))
         fi
-        echo "$tool_compact_str"
+        # Output both parts for the final line
+        if [ "$others_count" -gt 0 ]; then
+            others_str="\\033[0;90m...+${others_count} others\\033[0m"
+            if [ -n "$tool_compact_str" ]; then
+                echo "${tool_compact_str} ${others_str}"
+            else
+                echo "${others_str}"
+            fi
+        else
+            echo "${tool_compact_str}"
+        fi
     done | tail -1 > "${tool_counts_file}.out"
     
     tool_compact_str=$(cat "${tool_counts_file}.out" 2>/dev/null)
     rm -f "${tool_counts_file}.out"
     
     [ -n "$tool_compact_str" ] && tool_stats=" | ${tool_compact_str}"
-fi
-
-if [ "$mcp_services" -gt 0 ]; then
-    tool_stats="${tool_stats} \033[0;37mMCP:\033[1;33m${mcp_services}\033[0m"
-fi
-
-if [ "$command_calls" -gt 0 ]; then
-    tool_stats="${tool_stats} \033[0;37mCommands:\033[1;33m${command_calls}\033[0m"
 fi
 
 # Two-line display (Style B: core on top, tools on bottom)
