@@ -248,7 +248,7 @@ output_tokens_formatted=$(format_number $output_tokens)
 cache_hit_str=""
 if [ "${cache_read_tokens:-0}" -gt 0 ] 2>/dev/null && [ "$input_tokens" -gt 0 ] 2>/dev/null; then
     cache_hit_pct=$((cache_read_tokens * 100 / input_tokens))
-    cache_hit_str=" \\033[0;32m(cache: ${cache_hit_pct}%)\\033[0m"
+    cache_hit_str=" \\033[0;90mCache:\\033[0;36m${cache_hit_pct}%\\033[0m"
 fi
 
 # Determine color based on usage level
@@ -350,7 +350,7 @@ fi
 section_dir="\\033[0;36m${display_dir}${RESET}${git_compact}"
 section_model="\\033[1;36m${model_short}${RESET}"
 section_context="${context_color}${context_bar}${GRAY}${context_percentage}%${RESET}"
-section_tokens="\\033[0;35m↑${input_tokens_formatted} ↓${output_tokens_formatted}${RESET}${cache_hit_str}"
+section_tokens="\\033[0;90mIn:\\033[0;32m${input_tokens_formatted} \\033[0;90mOut:\\033[0;33m${output_tokens_formatted}${RESET}${cache_hit_str}"
 section_time="\\033[0;34m${runtime}${RESET}"
 
 line1="${section_dir} ${SEP} ${section_model} ${SEP} ${section_context} ${SEP} ${section_tokens} ${SEP} ${section_time}"
