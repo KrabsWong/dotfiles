@@ -2,7 +2,7 @@
 
 # Read JSON input from stdin and extract all fields in a single jq call
 # Use "null" string as placeholder for missing values to prevent field misalignment with read
-IFS=$'\t' read -r current_dir model_display model_id transcript_path context_used_pct context_input_tokens context_output_tokens < <(
+IFS=$'\t' read -r current_dir model_display model_id transcript_path context_used_pct context_input_tokens context_output_tokens cache_read_tokens cache_creation_tokens total_duration_ms < <(
     jq -r '[
         (.workspace.current_dir // "null"),
         (.model.display_name // "null"),
@@ -10,7 +10,10 @@ IFS=$'\t' read -r current_dir model_display model_id transcript_path context_use
         (.transcript_path // "null"),
         ((.context_window.used_percentage // null) | tostring),
         ((.context_window.total_input_tokens // 0) | tostring),
-        ((.context_window.total_output_tokens // 0) | tostring)
+        ((.context_window.total_output_tokens // 0) | tostring),
+        ((.context_window.current_usage.cache_read_input_tokens // 0) | tostring),
+        ((.context_window.current_usage.cache_creation_input_tokens // 0) | tostring),
+        ((.cost.total_duration_ms // 0) | tostring)
     ] | @tsv' 2>/dev/null
 )
 dir_name=$(basename "$current_dir" 2>/dev/null || echo "unknown")
@@ -75,6 +78,11 @@ input_tokens=0
 output_tokens=0
 total_api_duration_ms=0
 runtime="0s"
+
+# Use cost.total_duration_ms from stdin JSON as primary runtime source
+if [ "${total_duration_ms:-0}" -gt 0 ] 2>/dev/null; then
+    runtime=$(format_duration $((total_duration_ms / 1000)))
+fi
 tool_calls=0
 command_calls=0
 mcp_services=0
@@ -206,13 +214,17 @@ fi
 
 # Build model display (shorten if needed)
 model_short="$model_display"
-if [ "$model_display" != "$model_id" ] && [ ${#model_display} -gt 15 ]; then
-    # Use ID if display name is too long
+if [ "$model_short" = "null" ] || [ -z "$model_short" ]; then
+    model_short="agent"
+elif [ "$model_display" != "$model_id" ] && [ ${#model_display} -gt 15 ]; then
     model_short="$model_id"
 fi
 
 # Use display identifier for showing directory info
 display_dir="$display_identifier"
+if [ "$display_dir" = "null" ] || [ -z "$display_dir" ]; then
+    display_dir="-"
+fi
 
 # Use pre-calculated context window usage percentage from stdin JSON
 context_percentage=0
@@ -231,6 +243,13 @@ fi
 # Format token numbers with suffix
 input_tokens_formatted=$(format_number $input_tokens)
 output_tokens_formatted=$(format_number $output_tokens)
+
+# Calculate cache hit percentage (only when cache data is available)
+cache_hit_str=""
+if [ "${cache_read_tokens:-0}" -gt 0 ] 2>/dev/null && [ "$input_tokens" -gt 0 ] 2>/dev/null; then
+    cache_hit_pct=$((cache_read_tokens * 100 / input_tokens))
+    cache_hit_str=" \\033[0;32m(cache: ${cache_hit_pct}%)\\033[0m"
+fi
 
 # Determine color based on usage level
 get_context_color() {
@@ -267,23 +286,9 @@ build_progress_bar() {
 }
 context_bar=$(build_progress_bar $context_percentage)
 
-# Tool name abbreviation function
-get_abbrev() {
-    if [ "$1" = "Bash" ]; then echo "Bash"
-    elif [ "$1" = "Read" ]; then echo "Read"
-    elif [ "$1" = "Write" ]; then echo "Write"
-    elif [ "$1" = "Edit" ]; then echo "Edit"
-    elif [ "$1" = "MultiEdit" ]; then echo "ME"
-    elif [ "$1" = "TodoWrite" ]; then echo "Todo"
-    elif [ "$1" = "Grep" ]; then echo "Grep"
-    elif [ "$1" = "Glob" ]; then echo "Glob"
-    elif [ "$1" = "WebFetch" ]; then echo "WebF"
-    elif [ "$1" = "WebSearch" ]; then echo "WebS"
-    elif [ "$1" = "Task" ]; then echo "Task"
-    elif [ "$1" = "AskUserQuestion" ]; then echo "Q"
-    elif [ "$1" = "NotebookEdit" ]; then echo "NE"
-    else echo "$(echo "$1" | cut -c1)"
-    fi
+# Tool name display function (use full names)
+get_tool_display() {
+    echo "$1"
 }
 
 # Build tool statistics string (if any)
@@ -292,11 +297,13 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=""
 
     sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
-        abbrev=$(get_abbrev "$name")
+        display_name=$(get_tool_display "$name")
+        # Muted name, bold bright count for emphasis
+        entry="\\033[0;37m${display_name}:\\033[1;33m${count}\\033[0m"
         if [ -z "$tool_compact_str" ]; then
-            tool_compact_str="${abbrev}:${count}"
+            tool_compact_str="${entry}"
         else
-            tool_compact_str="${tool_compact_str} ${abbrev}:${count}"
+            tool_compact_str="${tool_compact_str} ${entry}"
         fi
         echo "$tool_compact_str"
     done | tail -1 > "${tool_counts_file}.out"
@@ -308,50 +315,48 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
 fi
 
 if [ "$mcp_services" -gt 0 ]; then
-    tool_stats="${tool_stats} 🔌${mcp_services}"
+    tool_stats="${tool_stats} \033[0;37mMCP:\033[1;33m${mcp_services}\033[0m"
 fi
 
 if [ "$command_calls" -gt 0 ]; then
-    tool_stats="${tool_stats} ⚡${command_calls}"
+    tool_stats="${tool_stats} \033[0;37mCommands:\033[1;33m${command_calls}\033[0m"
 fi
 
-# Single-line display inspired by cship/starship
-# Format: 🤖 model | ⏱️ time | 📊 tokens ↑↓ | [context_bar] | 🔧 tools | 📁 directory/git
+# Two-line display (Style B: core on top, tools on bottom)
+# Line 1: dir(git) │ model │ context_bar % │ ↑input ↓output [💾cache%] │ runtime
+# Line 2: tool stats (only if any)
 
-# Build sections
-section_model="\\033[1;36m🤖 ${model_short}\\033[0m"
-section_time="\\033[0;34m⏱️ ${runtime}\\033[0m"
-section_tokens="\\033[0;35m📊 ↑${input_tokens_formatted} ↓${output_tokens_formatted}\\033[0m"
-section_context="${context_color}${context_bar}${context_percentage}%\\033[0m"
+GRAY="\\033[0;90m"
+RESET="\\033[0m"
+SEP="${GRAY}│${RESET}"
 
-# Compact git info - reuse existing git_info but simplify
+# Git branch display
 if [ -n "$git_info" ]; then
-    # Extract just branch name from git_info (remove hash and stats)
-    git_branch_clean=$(echo "$git_info" | sed -E 's/.*\(([a-zA-Z0-9_-]+).*/\1/')
+    git_branch_clean=$(echo "$git_info" | sed -E 's/.*\(([a-zA-Z0-9_/-]+).*/\1/')
     if echo "$git_info" | grep -q "✗"; then
-        git_compact=" \\033[0;33m(${git_branch_clean}*)\\033[0m"
+        git_compact=" \\033[0;33m(${git_branch_clean}*)${RESET}"
     else
-        git_compact=" \\033[0;32m(${git_branch_clean})\\033[0m"
+        git_compact=" \\033[0;32m(${git_branch_clean})${RESET}"
     fi
 else
     git_compact=""
 fi
 
-section_dir="\\033[0;36m📁 ${display_dir}\\033[0m${git_compact}"
+# --- Line 1: All core info ---
+section_dir="\\033[0;36m${display_dir}${RESET}${git_compact}"
+section_model="\\033[1;36m${model_short}${RESET}"
+section_context="${context_color}${context_bar}${GRAY}${context_percentage}%${RESET}"
+section_tokens="\\033[0;35m↑${input_tokens_formatted} ↓${output_tokens_formatted}${RESET}${cache_hit_str}"
+section_time="\\033[0;34m${runtime}${RESET}"
 
-# Combine all sections with separators
-statusline="${section_model} │ ${section_time} │ ${section_tokens} │ ${section_context}"
+line1="${section_dir} ${SEP} ${section_model} ${SEP} ${section_context} ${SEP} ${section_tokens} ${SEP} ${section_time}"
 
-# Add tool stats if present
+printf "%b\n" "${line1}"
+
+# --- Line 2: Tool stats (only when there are tool calls) ---
 if [ -n "$tool_stats" ]; then
-    # Clean up tool stats format (remove leading " | ")
     clean_tool_stats=$(echo "$tool_stats" | sed 's/^ | //')
     if [ -n "$clean_tool_stats" ]; then
-        statusline="${statusline} │ \\033[0;33m🔧 ${clean_tool_stats}\\033[0m"
+        printf "%b\n" "🔧 ${clean_tool_stats}"
     fi
 fi
-
-# Add directory at the end
-statusline="${statusline} │ ${section_dir}"
-
-printf "%b\n" "${statusline}"
