@@ -298,7 +298,8 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=""
     others_count=0
 
-    sort "$tool_counts_file" | uniq -c | sort -rn | while read -r count name; do
+    # Use process substitution instead of pipeline to avoid subshell
+    while read -r count name; do
         if [ "$count" -gt 1 ]; then
             display_name=$(get_tool_display "$name")
             entry="\\033[0;37m${display_name}:\\033[1;33m${count}\\033[0m"
@@ -310,22 +311,18 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
         else
             others_count=$((others_count + 1))
         fi
-        # Output both parts for the final line
-        if [ "$others_count" -gt 0 ]; then
-            others_str="\\033[0;90m...+${others_count} others\\033[0m"
-            if [ -n "$tool_compact_str" ]; then
-                echo "${tool_compact_str} ${others_str}"
-            else
-                echo "${others_str}"
-            fi
+    done < <(sort "$tool_counts_file" | uniq -c | sort -rn)
+
+    # Build final string with others count
+    if [ "$others_count" -gt 0 ]; then
+        others_str="\\033[0;90m...+${others_count} others\\033[0m"
+        if [ -n "$tool_compact_str" ]; then
+            tool_compact_str="${tool_compact_str} ${others_str}"
         else
-            echo "${tool_compact_str}"
+            tool_compact_str="${others_str}"
         fi
-    done | tail -1 > "${tool_counts_file}.out"
-    
-    tool_compact_str=$(cat "${tool_counts_file}.out" 2>/dev/null)
-    rm -f "${tool_counts_file}.out"
-    
+    fi
+
     [ -n "$tool_compact_str" ] && tool_stats=" | ${tool_compact_str}"
 fi
 
