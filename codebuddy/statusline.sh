@@ -1,63 +1,17 @@
 #!/usr/bin/env bash
 
-# Cache directory and file for model context data
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/codebuddy"
-CACHE_FILE="$CACHE_DIR/models_context.json"
-CACHE_TTL=86400  # 24 hours in seconds
-
-# Function to get context window size from models.dev API
-get_context_window() {
-    local model_id="$1"
-    local context_size=""
-    local cache_valid=false
-
-    # Check if cache exists and is valid
-    if [ -f "$CACHE_FILE" ]; then
-        local cache_age=$(($(date +%s) - $(stat -f%m "$CACHE_FILE" 2>/dev/null || stat -c%Y "$CACHE_FILE" 2>/dev/null || echo 0)))
-        if [ "$cache_age" -lt "$CACHE_TTL" ]; then
-            cache_valid=true
-        fi
-    fi
-
-    # Try to get context from cache first
-    if [ "$cache_valid" = true ] && [ -f "$CACHE_FILE" ]; then
-        context_size=$(jq -r --arg model "$model_id" '
-            to_entries[] | 
-            select(.value.models[$model].limit.context != null) | 
-            .value.models[$model].limit.context
-        ' "$CACHE_FILE" 2>/dev/null | head -1)
-    fi
-
-    # If not in cache, fetch from API
-    if [ -z "$context_size" ] || [ "$context_size" = "null" ]; then
-        # Create cache directory if needed
-        mkdir -p "$CACHE_DIR"
-
-        # Fetch and cache the API data
-        local api_data=$(curl -s "https://models.dev/api.json" 2>/dev/null)
-        if [ -n "$api_data" ]; then
-            echo "$api_data" > "$CACHE_FILE"
-
-            # Extract context size for the model
-            context_size=$(echo "$api_data" | jq -r --arg model "$model_id" '
-                to_entries[] | 
-                select(.value.models[$model].limit.context != null) | 
-                .value.models[$model].limit.context
-            ' 2>/dev/null | head -1)
-        fi
-    fi
-
-    # Return context size or default fallback
-    if [ -n "$context_size" ] && [ "$context_size" != "null" ]; then
-        echo "$context_size"
-    else
-        echo "128000"  # Default fallback
-    fi
-}
-
 # Read JSON input from stdin and extract all fields in a single jq call
-read -r current_dir model_display model_id transcript_path < <(
-    jq -r '[.workspace.current_dir, .model.display_name, .model.id, .transcript_path] | @tsv' 2>/dev/null
+# Use "null" string as placeholder for missing values to prevent field misalignment with read
+IFS=$'\t' read -r current_dir model_display model_id transcript_path context_used_pct context_input_tokens context_output_tokens < <(
+    jq -r '[
+        (.workspace.current_dir // "null"),
+        (.model.display_name // "null"),
+        (.model.id // "null"),
+        (.transcript_path // "null"),
+        ((.context_window.used_percentage // null) | tostring),
+        ((.context_window.total_input_tokens // 0) | tostring),
+        ((.context_window.total_output_tokens // 0) | tostring)
+    ] | @tsv' 2>/dev/null
 )
 dir_name=$(basename "$current_dir" 2>/dev/null || echo "unknown")
 
@@ -260,14 +214,23 @@ fi
 # Use display identifier for showing directory info
 display_dir="$display_identifier"
 
+# Use pre-calculated context window usage percentage from stdin JSON
+context_percentage=0
+if [ -n "$context_used_pct" ] && [ "$context_used_pct" != "null" ]; then
+    context_percentage=$(printf "%.0f" "$context_used_pct" 2>/dev/null || echo 0)
+fi
+
+# Use token counts from context_window JSON if transcript parsing didn't provide them
+if [ "$input_tokens" -eq 0 ] && [ "$context_input_tokens" -gt 0 ] 2>/dev/null; then
+    input_tokens=$context_input_tokens
+fi
+if [ "$output_tokens" -eq 0 ] && [ "$context_output_tokens" -gt 0 ] 2>/dev/null; then
+    output_tokens=$context_output_tokens
+fi
+
 # Format token numbers with suffix
 input_tokens_formatted=$(format_number $input_tokens)
 output_tokens_formatted=$(format_number $output_tokens)
-
-# Calculate context window usage percentage
-total_tokens=$((input_tokens + output_tokens))
-context_window=$(get_context_window "$model_id")
-context_percentage=$((total_tokens * 100 / context_window))
 
 # Determine color based on usage level
 get_context_color() {
@@ -303,19 +266,6 @@ build_progress_bar() {
     echo "${bar} "
 }
 context_bar=$(build_progress_bar $context_percentage)
-
-# Format context window size for display
-format_context_window() {
-    local size=$1
-    if [ "$size" -ge 1000000 ]; then
-        echo "$((size / 1000000))M"
-    elif [ "$size" -ge 1000 ]; then
-        echo "$((size / 1000))K"
-    else
-        echo "$size"
-    fi
-}
-context_window_formatted=$(format_context_window $context_window)
 
 # Tool name abbreviation function
 get_abbrev() {
