@@ -160,17 +160,25 @@ if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$trans
         input_tokens: ($latest_message.message.usage.input_tokens // 0),
         output_tokens: ($latest_message.message.usage.output_tokens // 0),
         tool_calls: ($all | map(select(.type == "function_call")) | length),
-        first_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | min // 0),
-        last_ts: ($all | map(select(.type == "function_call")) | map(.timestamp // 0) | max // 0),
+        first_ts: ($all | map(select(.timestamp != null)) | map(.timestamp) | min // empty),
+        last_ts: ($all | map(select(.timestamp != null)) | map(.timestamp) | max // empty),
         command_calls: ($all | map(select(.type == "message" and .role == "user" and (.content | tostring | contains("<command-name>")))) | length)
       } | to_entries | map(.value) | @tsv' "$transcript_path" 2>/dev/null || echo "0	0	0	0	0	0")
-    
+
     read -r input_tokens output_tokens tool_calls first_timestamp last_timestamp command_calls <<< "$jq_output"
-    
-    # Calculate duration (global, not affected by compact)
-    if [ -n "$first_timestamp" ] && [ "$first_timestamp" != "0" ] && [ -n "$last_timestamp" ] && [ "$last_timestamp" != "0" ]; then
-        total_api_duration_ms=$((last_timestamp - first_timestamp))
-        [ "$total_api_duration_ms" -gt 0 ] && runtime=$(format_duration $((total_api_duration_ms / 1000)))
+
+    # Calculate duration from ISO timestamps (convert to Unix timestamps first)
+    if [ -n "$first_timestamp" ] && [ "$first_timestamp" != "null" ] && [ -n "$last_timestamp" ] && [ "$last_timestamp" != "null" ]; then
+        # Extract date part (remove milliseconds and timezone)
+        first_ts_clean=$(echo "$first_timestamp" | sed -E 's/\.[0-9]+Z?$//' | sed 's/T/ /')
+        last_ts_clean=$(echo "$last_timestamp" | sed -E 's/\.[0-9]+Z?$//' | sed 's/T/ /')
+        # Convert to Unix timestamp (macOS/BSD date)
+        first_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$first_ts_clean" "+%s" 2>/dev/null || date -d "$first_ts_clean" "+%s" 2>/dev/null)
+        last_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$last_ts_clean" "+%s" 2>/dev/null || date -d "$last_ts_clean" "+%s" 2>/dev/null)
+        if [ -n "$first_epoch" ] && [ -n "$last_epoch" ]; then
+            total_duration=$((last_epoch - first_epoch))
+            [ "$total_duration" -gt 0 ] && runtime=$(format_duration $total_duration)
+        fi
     fi
     # Extract tool names for counting (global stats, not affected by compact)
     if [ "$tool_calls" -gt 0 ]; then
