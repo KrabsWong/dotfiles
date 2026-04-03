@@ -1,0 +1,4 @@
+{"type":"message","role":"user","content":[{"type":"text","text":"hello"}],"timestamp":1700000000000}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read"},{"type":"tool_use","name":"Read"}],"usage":{"input_tokens":1000,"output_tokens":200}},"timestamp":1700000060000}
+{"type":"function_call","name":"Bash","timestamp":1700000120000}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit"}],"usage":{"input_tokens":2000,"output_tokens":400}},"timestamp":1700000180000}

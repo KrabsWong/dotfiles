@@ -1,0 +1,4 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"OldTool"}],"usage":{"input_tokens":9000,"output_tokens":800}},"timestamp":1700000000000}
+{"type":"message","role":"user","content":[{"type":"text","text":"<Compact Instructions>compact summary</Compact Instructions>"}],"timestamp":1700000100000}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read"},{"type":"tool_use","name":"Write"}],"usage":{"input_tokens":500,"output_tokens":100}},"timestamp":1700000200000}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}],"usage":{"input_tokens":1200,"output_tokens":300}},"timestamp":1700000300000}

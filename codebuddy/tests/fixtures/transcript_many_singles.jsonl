@@ -1,0 +1,6 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read"},{"type":"tool_use","name":"Read"},{"type":"tool_use","name":"Read"}],"usage":{"input_tokens":3000,"output_tokens":500}},"timestamp":1700000060000}
+{"type":"function_call","name":"Bash","timestamp":1700000120000}
+{"type":"function_call","name":"Edit","timestamp":1700000130000}
+{"type":"function_call","name":"Glob","timestamp":1700000140000}
+{"type":"function_call","name":"Grep","timestamp":1700000150000}
+{"type":"assistant","message":{"content":[],"usage":{"input_tokens":4000,"output_tokens":600}},"timestamp":1700000180000}
