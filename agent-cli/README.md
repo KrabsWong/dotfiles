@@ -28,18 +28,12 @@ dotfiles/codebuddy (main*) │ claude-sonnet-4-6 │ ████░░░░ 42
 {
   "statusLine": {
     "type": "command",
-    "command": "/bin/bash /path/to/statusline.sh"
+    "command": "~/.codebuddy/statusline.sh"
   }
 }
 ```
 
-也可以用符号链接：
-
-```bash
-ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
-```
-
-然后配置：
+也可以显式指定 `/bin/bash`（脚本无需可执行权限）：
 
 ```json
 {
@@ -50,6 +44,14 @@ ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
 }
 ```
 
+> 两种写法均可。直接写脚本路径时，需确保脚本有可执行权限（`chmod +x`）且首行包含 shebang（如 `#!/usr/bin/env bash`）。
+
+可以用符号链接将脚本放到配置目录：
+
+```bash
+ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
+```
+
 ### Claude Code
 
 在 `~/.claude/settings.json`（或项目级 `.claude/settings.json`）中配置：
@@ -58,7 +60,18 @@ ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
 {
   "statusLine": {
     "type": "command",
-    "command": "/bin/bash /path/to/statusline.sh"
+    "command": "~/.claude/statusline.sh"
+  }
+}
+```
+
+同样支持显式指定 `/bin/bash`：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/bin/bash ~/.claude/statusline.sh"
   }
 }
 ```
