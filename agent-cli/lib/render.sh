@@ -76,7 +76,9 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
             name = names[i]
             if (c > 1) {
                 entry = "\\033[0;37m" name ":\\033[1;33m" c "\\033[0m"
-            } else if (!has_multi || singles <= 1) {
+            } else if (!has_multi) {
+                entry = "\\033[0;37m" name ":\\033[1;33m" c "\\033[0m"
+            } else if (singles <= 1) {
                 entry = "\\033[0;37m" name "\\033[0m"
             } else {
                 others++
