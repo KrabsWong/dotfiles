@@ -118,10 +118,14 @@ if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$trans
         last // {message: {usage: {input_tokens: 0, output_tokens: 0}}}) as $latest_message |
 
       # Calculate stats
+      # Support both formats: function_call (Codebuddy CLI) and tool_use in assistant messages (Claude Code)
       {
         input_tokens: ($latest_message.message.usage.input_tokens // 0),
         output_tokens: ($latest_message.message.usage.output_tokens // 0),
-        tool_calls: ($all | map(select(.type == "function_call")) | length),
+        tool_calls: (
+          ($all | map(select(.type == "function_call")) | length) +
+          ($all | map(select(.type == "assistant" and .message.content != null) | .message.content | map(select(.type == "tool_use")) | length) | add // 0)
+        ),
         first_ts: ($all | map(select(.timestamp != null)) | map(.timestamp) | min // empty),
         last_ts: ($all | map(select(.timestamp != null)) | map(.timestamp) | max // empty),
         command_calls: ($all | map(select(.type == "message" and .role == "user" and (.content | tostring | contains("<command-name>")))) | length)
@@ -143,9 +147,15 @@ if [ -n "$transcript_path" ] && [ "$transcript_path" != "null" ] && [ -f "$trans
         fi
     fi
     # Extract tool names for counting (global stats, not affected by compact)
+    # Support both formats: function_call (Codebuddy CLI) and tool_use in assistant messages (Claude Code)
     if [ "$tool_calls" -gt 0 ]; then
         # Count all tool calls (global, not reset by compact)
-        jq -r 'select(.type == "function_call") | .name // empty' "$transcript_path" 2>/dev/null > "$tool_counts_file"
+        jq -r '
+          if .type == "function_call" then .name
+          elif .type == "assistant" and .message.content != null then
+            (.message.content | map(select(.type == "tool_use") | .name) | .[])
+          else empty
+          end // empty' "$transcript_path" 2>/dev/null > "$tool_counts_file"
         
         # Count unique MCP services from tool names
         if [ -s "$tool_counts_file" ]; then
@@ -292,16 +302,33 @@ get_tool_display() {
 }
 
 # Build tool statistics string (if any)
-# Show tools with count > 1 individually, fold count=1 tools into "+N others"
+# If all tools have count=1, show them all; otherwise fold count=1 tools into "+N others (each called once)"
 tool_stats=""
 if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     tool_compact_str=""
     others_count=0
+    has_multi=0
 
-    # Use process substitution instead of pipeline to avoid subshell
+    # First pass: check if any tool has count > 1
     while read -r count name; do
         if [ "$count" -gt 1 ]; then
-            display_name=$(get_tool_display "$name")
+            has_multi=1
+            break
+        fi
+    done < <(sort "$tool_counts_file" | uniq -c | sort -rn)
+
+    # Count how many tools have count=1 (to decide whether to fold)
+    singles_count=0
+    while read -r count name; do
+        [ "$count" -eq 1 ] && singles_count=$((singles_count + 1))
+    done < <(sort "$tool_counts_file" | uniq -c | sort -rn)
+
+    # Second pass: build display string
+    # Show count=1 tools individually if: all tools are count=1, OR only 1 tool is count=1
+    # Fold count=1 tools into "+N others" only when has_multi=1 AND singles_count >= 2
+    while read -r count name; do
+        display_name=$(get_tool_display "$name")
+        if [ "$count" -gt 1 ]; then
             entry="\\033[0;37m${display_name}:\\033[1;33m${count}\\033[0m"
             if [ -z "$tool_compact_str" ]; then
                 tool_compact_str="${entry}"
@@ -309,13 +336,24 @@ if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
                 tool_compact_str="${tool_compact_str} ${entry}"
             fi
         else
-            others_count=$((others_count + 1))
+            if [ "$has_multi" -eq 0 ] || [ "$singles_count" -le 1 ]; then
+                # Show individually: either all are count=1, or only one tool is count=1
+                entry="\\033[0;37m${display_name}\\033[0m"
+                if [ -z "$tool_compact_str" ]; then
+                    tool_compact_str="${entry}"
+                else
+                    tool_compact_str="${tool_compact_str} ${entry}"
+                fi
+            else
+                # Fold: has multi-count tools AND 2+ single-count tools
+                others_count=$((others_count + 1))
+            fi
         fi
     done < <(sort "$tool_counts_file" | uniq -c | sort -rn)
 
-    # Build final string with others count
+    # Append others summary (only when there are multi-count tools)
     if [ "$others_count" -gt 0 ]; then
-        others_str="\\033[0;90m...+${others_count} others\\033[0m"
+        others_str="\\033[0;90m...+${others_count} others (×1)\\033[0m"
         if [ -n "$tool_compact_str" ]; then
             tool_compact_str="${tool_compact_str} ${others_str}"
         else
