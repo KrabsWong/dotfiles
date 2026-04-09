@@ -57,6 +57,10 @@ build_progress_bar() {
     local pct=$1
     local width=8
     local filled=$((pct * width / 100))
+    # 百分比非零时至少显示 1 格，避免进度条全空与数字不一致
+    if [ "$pct" -gt 0 ] && [ "$filled" -eq 0 ]; then
+        filled=1
+    fi
     local empty=$((width - filled))
     local bar=""
 
