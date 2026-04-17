@@ -52,3 +52,13 @@ vim.opt.clipboard = "unnamedplus"
 
 -- Custom statusline without plugin
 -- require("config.options.statusline")
+
+-- Built-in treesitter: enable highlighting and indentation per filetype
+vim.api.nvim_create_autocmd("FileType", {
+  callback = function(ev)
+    -- Enable treesitter highlighting (replaces regex syntax)
+    pcall(vim.treesitter.start, ev.buf)
+    -- Enable treesitter-based indentation
+    vim.bo[ev.buf].indentexpr = "v:lua.vim.treesitter.indentexpr()"
+  end,
+})
