@@ -1,2 +1,4 @@
 .DS_Store
 .alma-snapshots
+.pending_logs.md
+docs/
