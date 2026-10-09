@@ -9,7 +9,7 @@
 ![statusline 效果图](public/statusline-screenshot.png)
 
 ```
-dotfiles/codebuddy (main*) │ claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache:20% │ 3m25s
+dotfiles/codebuddy (main*) │ claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache:20.00% │ 3m25s
 🔧 Read:12 Edit:5 Bash:3 ...+2 others (×1)
 ```
 
@@ -203,7 +203,9 @@ source lib/render.sh          # 最终输出
 🔧 {Tool1}:{N} {Tool2}:{N} ...+N others (×1)
 ```
 
-**Token 回退逻辑：** transcript 解析无数据时，自动回退到 stdin `context_window` 中的 token 数。
+**WorkBuddy 会话统计：** 对真实的 `type=message, role=assistant` 和带 usage 的 `function_call` / `reasoning` 记录，优先读取 `providerData.usage`，其次读取 `message.usage`、`providerData.rawUsage`。按 `providerData.messageId` 或 `message.id` 去重响应后，累计完整输入、输出和缓存读取量；Compact 不清空这些会话累计值。其 input 已包含缓存，不再次累加。`Cache` 使用累计缓存量除以累计输入，四舍五入保留两位小数；有效零命中显示 `0.00%`，未知或无效缓存量隐藏指标，不借用 stdin 的单次缓存量。
+
+**Token 回退逻辑：** WorkBuddy 有有效累计数据时保留合法零值；无 transcript 数据时回退到 stdin。原有 Claude Code 格式继续使用最新 assistant usage。
 
 **工具折叠逻辑：**
 

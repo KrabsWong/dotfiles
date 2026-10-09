@@ -178,7 +178,7 @@ echo "══ 6. Cache 命中率 ════════════════
 json=$(make_json "/tmp/proj" "claude-sonnet-4-6" "Claude Sonnet 4.6" "null" 42 50000 3000 10000 120000)
 out=$(run_statusline "$json")
 
-assert_contains   "Cache 命中率显示"   "$out" "Cache:20%"
+assert_contains   "Cache 命中率显示"   "$out" "Cache:20.00%"
 
 # ══════════════════════════════════════════════════════════════════════════════
 echo ""

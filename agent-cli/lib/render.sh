@@ -9,10 +9,10 @@
 #   format_number, get_context_color, build_progress_bar
 
 # --- Token 回退：transcript 无数据时使用 stdin context_window 数据 ---
-if [ "$input_tokens" -eq 0 ] && [ "${context_input_tokens:-0}" -gt 0 ] 2>/dev/null; then
+if [ "$workbuddy_usage" -eq 0 ] && [ "$input_tokens" -eq 0 ] && [ "${context_input_tokens:-0}" -gt 0 ] 2>/dev/null; then
     input_tokens=$context_input_tokens
 fi
-if [ "$output_tokens" -eq 0 ] && [ "${context_output_tokens:-0}" -gt 0 ] 2>/dev/null; then
+if [ "$workbuddy_usage" -eq 0 ] && [ "$output_tokens" -eq 0 ] && [ "${context_output_tokens:-0}" -gt 0 ] 2>/dev/null; then
     output_tokens=$context_output_tokens
 fi
 
@@ -38,8 +38,9 @@ fi
 
 # --- Cache 命中率 ---
 cache_hit_str=""
-if [ "${cache_read_tokens:-0}" -gt 0 ] 2>/dev/null && [ "$input_tokens" -gt 0 ] 2>/dev/null; then
-    cache_hit_pct=$((cache_read_tokens * 100 / input_tokens))
+if [ "${cache_read_tokens:-0}" -ge 0 ] && [ "$input_tokens" -gt 0 ] &&
+   { [ "$cache_read_tokens" -gt 0 ] || [ "$workbuddy_usage" -eq 1 ]; }; then
+    cache_hit_pct=$(LC_ALL=C awk -v cached="$cache_read_tokens" -v input="$input_tokens" 'BEGIN { printf "%.2f", cached * 100 / input }')
     cache_hit_str=" \\033[0;90mCache:\\033[0;36m${cache_hit_pct}%\\033[0m"
 fi
 
