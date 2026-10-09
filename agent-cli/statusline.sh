@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 # statusline.sh — CodeBuddy 状态栏主入口
-# 从 stdin 读取 JSON，输出两行彩色状态信息
+# 从 stdin 读取 JSON，输出两行（简化模式）或三行（完整模式）彩色状态信息
 # 详见 README.md
+
+# 工具展示默认简化；通过启动参数切换为完整明细。
+tools_mode=simple
+for arg in "$@"; do
+    case "$arg" in
+        --tools=simple) tools_mode=simple ;;
+        --tools=full) tools_mode=full ;;
+        *) printf '未知参数：%s（支持 --tools=simple 或 --tools=full）\n' "$arg" >&2; exit 2 ;;
+    esac
+done
 
 # 获取脚本真实路径（解析符号链接）
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"

@@ -1,6 +1,6 @@
 # statusline.sh — AI 编程助手状态栏脚本
 
-适用于 **CodeBuddy Code** 和 **Claude Code**，从 stdin 读取 JSON，解析会话 transcript，在终端输出两行彩色状态信息。
+适用于 **CodeBuddy Code** 和 **Claude Code**，从 stdin 读取 JSON，解析会话 transcript，在终端输出两行（默认简化模式）或三行（完整模式）彩色状态信息。
 
 ---
 
@@ -9,12 +9,14 @@
 ![statusline 效果图](public/statusline-screenshot.png)
 
 ```
-dotfiles/codebuddy (main*) │ claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache:20.00% │ 3m25s
-🔧 Read:12 Edit:5 Bash:3 ...+2 others (×1)
+dotfiles/codebuddy (main*)
+claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache:20.00% │ 3m25s │ Tools:22
 ```
 
-- **第 1 行**：始终显示，包含目录、模型、上下文用量、token 数、运行时长
-- **第 2 行**：仅当本次会话有工具调用时显示
+- **第 1 行**：目录与完整 Git 分支
+- **第 2 行**：模型、上下文用量、token 数、缓存率和运行时长
+- **默认简化模式**：第二行末尾显示 `Tools:N`，包括无调用时的 `Tools:0`
+- **完整模式**：第三行显示工具名称与调用次数，仅在有调用时出现
 
 ---
 
@@ -76,6 +78,42 @@ ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
 }
 ```
 
+### 工具展示模式
+
+默认使用简化模式，无需修改已有启动命令。也可显式指定 `--tools=simple`。
+
+完整模式在 `statusLine.command` 末尾添加 `--tools=full`：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/bin/bash ~/.codebuddy/statusline.sh --tools=full"
+  }
+}
+```
+
+Claude Code 在 `~/.claude/settings.json` 中使用：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/bin/bash ~/.claude/statusline.sh --tools=full"
+  }
+}
+```
+
+完整模式保留前两行，并在有工具调用时追加第三行，例如：
+
+```text
+dotfiles/codebuddy (main*)
+claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache:20.00% │ 3m25s
+🔧 Read:12 Edit:5 Bash:3 ...+2 others (×1)
+```
+
+恢复默认简化模式时，删除命令末尾的 `--tools=full`，或改为 `--tools=simple`。
+
 ### 注意事项
 
 - 若脚本通过**符号链接**调用，主入口已使用 `readlink -f` 解析真实路径，`lib/` 模块可被正确找到，无需特殊处理。
@@ -86,22 +124,15 @@ ln -sf /path/to/statusline.sh ~/.codebuddy/statusline.sh
 ## 目录结构
 
 ```
-codebuddy/
-├── statusline.sh              # 主入口（21 行）
+agent-cli/
+├── statusline.sh              # 主入口与模式参数
 ├── README.md
-├── lib/
-│   ├── format.sh              # 格式化工具函数（纯函数，无副作用）
-│   ├── parse_input.sh         # 从 stdin 解析 JSON 输入
-│   ├── parse_transcript.sh    # 解析 .jsonl transcript 文件
-│   ├── git_info.sh            # 检测 git 仓库状态
-│   └── render.sh              # 组装并输出两行状态栏
-└── tests/
-    ├── run_tests.sh           # 测试套件（61 个用例）
-    └── fixtures/
-        ├── transcript_normal.jsonl        # 普通 CodeBuddy 会话
-        ├── transcript_with_compact.jsonl  # 含 Compact 操作的会话
-        ├── transcript_many_singles.jsonl  # 多个单次工具（测试折叠逻辑）
-        └── transcript_claudecode.jsonl    # ClaudeCode 格式会话
+└── lib/
+    ├── format.sh              # 格式化工具函数（纯函数，无副作用）
+    ├── parse_input.sh         # 从 stdin 解析 JSON 输入
+    ├── parse_transcript.sh    # 解析 .jsonl transcript 文件
+    ├── git_info.sh            # 检测 git 仓库状态
+    └── render.sh              # 组装并输出两到三行状态栏
 ```
 
 ---
@@ -191,14 +222,21 @@ source lib/render.sh          # 最终输出
 
 ### `lib/render.sh`
 
-组装并输出两行状态栏：
+组装并输出两到三行状态栏：
 
 **第 1 行结构：**
 ```
-{目录} {git分支} │ {模型名} │ {进度条} {上下文%} │ In:{输入} Out:{输出} [Cache:{命中%}] │ {时长}
+{目录} {git分支}
 ```
 
-**第 2 行（有工具调用时）：**
+**第 2 行结构：**
+```
+{模型名} │ {进度条} {上下文%} │ In:{输入} Out:{输出} [Cache:{命中%}] │ {时长} [│ Tools:{总次数}]
+```
+
+简化模式在第二行末尾显示总次数；完整模式不在第二行重复显示总次数。
+
+**第 3 行（完整模式且有工具调用时）：**
 ```
 🔧 {Tool1}:{N} {Tool2}:{N} ...+N others (×1)
 ```
@@ -214,33 +252,6 @@ source lib/render.sh          # 最终输出
 | 全部工具只调用 1 次 | 逐个列出 |
 | 有多次调用工具，且仅 1 个工具只调用 1 次 | 全部列出（含计数） |
 | 有多次调用工具，且 ≥2 个工具只调用 1 次 | 高频工具展示计数，低频折叠为 `...+N others (×1)` |
-
----
-
-## 运行测试
-
-```bash
-bash tests/run_tests.sh
-```
-
-测试覆盖：
-
-| 分组 | 用例数 | 覆盖场景 |
-|------|--------|----------|
-| 基础输出结构 | 7 | 第 1 行各字段是否存在 |
-| transcript=null | 4 | stdin 回退逻辑 |
-| 普通会话 (CodeBuddy) | 8 | token/时长/工具行/折叠 |
-| ClaudeCode 格式 | 8 | 顶级 tool_use、ISO 时间戳、时长优先级 |
-| Compact 感知 | 3 | token 边界、全局工具统计 |
-| 工具折叠逻辑 | 4 | 折叠条件、×1 符号 |
-| Cache 命中率 | 1 | 百分比计算 |
-| 上下文颜色阈值 | 3 | 绿/黄/红三级颜色 |
-| 模型名截断 | 2 | display_name 过长时回退 |
-| 目录标识 | 2 | 单层/双层路径 |
-| 边界值（空输入） | 5 | 空 JSON、不存在 transcript、0%/100% |
-| format_number | 8 | K/M/B 边界、非数字输入 |
-| format_duration | 6 | 秒/分/时边界 |
-| **合计** | **61** | |
 
 ---
 

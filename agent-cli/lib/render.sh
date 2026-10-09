@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/render.sh — 构建并输出两行彩色状态栏
+# lib/render.sh — 构建并输出两到三行彩色状态栏
 # 依赖变量（来自各 parse_*.sh / git_info.sh）:
 #   display_identifier, model_display, model_id,
 #   context_used_pct, context_input_tokens, context_output_tokens,
@@ -56,7 +56,7 @@ fi
 
 # --- 工具统计折叠（sort|uniq -c 预处理，awk 做分类，兼容 BSD awk）---
 tool_stats=""
-if [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
+if [ "$tools_mode" = "full" ] && [ "$tool_calls" -gt 0 ] && [ -s "$tool_counts_file" ]; then
     # sort|uniq -c 得到 "  N name" 格式，按调用次数降序排列
     tool_compact_str=$(sort "$tool_counts_file" | uniq -c | sort -rn | awk -v times="×" '
     # 第一遍：收集所有 count 和 name
@@ -112,17 +112,20 @@ output_tokens_formatted=$(format_number "$output_tokens")
 context_color=$(get_context_color "$context_percentage")
 context_bar=$(build_progress_bar "$context_percentage")
 
-# --- 组装第 1 行 ---
+# --- 组装目录行与会话信息行 ---
 section_dir="\\033[0;36m${display_dir}${RESET}${git_compact}"
 section_model="\\033[1;36m${model_short}${RESET}"
 section_context="${context_color}${context_bar}${GRAY}${context_percentage}%${RESET}"
 section_tokens="\\033[0;90mIn:\\033[0;32m${input_tokens_formatted} \\033[0;90mOut:\\033[0;33m${output_tokens_formatted}${RESET}${cache_hit_str}"
 section_time="\\033[0;34m${runtime}${RESET}"
 
-line1="${section_dir} ${SEP} ${section_model} ${SEP} ${section_context} ${SEP} ${section_tokens} ${SEP} ${section_time}"
-printf "%b\n" "${line1}"
+line2="${section_model} ${SEP} ${section_context} ${SEP} ${section_tokens} ${SEP} ${section_time}"
+if [ "$tools_mode" = "simple" ]; then
+    line2="${line2} ${SEP} ${GRAY}Tools:\\033[1;33m${tool_calls}${RESET}"
+fi
+printf "%b\n" "$section_dir" "$line2"
 
-# --- 第 2 行：工具统计（有工具调用时才显示）---
+# --- 第 3 行：工具统计（有工具调用时才显示）---
 if [ -n "$tool_stats" ]; then
     printf "%b\n" "🔧 ${tool_stats}"
 fi

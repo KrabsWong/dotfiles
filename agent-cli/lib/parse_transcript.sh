@@ -118,7 +118,7 @@ if [ "${first_epoch:-0}" -gt 0 ] && [ "${last_epoch:-0}" -gt 0 ] 2>/dev/null; th
 fi
 
 # 提取工具名列表（全局统计，不受 compact 影响）
-if [ "$tool_calls" -gt 0 ]; then
+if [ "$tools_mode" = "full" ] && [ "$tool_calls" -gt 0 ]; then
     jq -r '
       if .type == "function_call" then .name                          # CodeBuddy CLI
       elif .type == "tool_use" and .tool_name then .tool_name          # ClaudeCode 顶级记录
