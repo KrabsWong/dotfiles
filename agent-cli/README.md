@@ -243,6 +243,8 @@ source lib/render.sh          # 最终输出
 
 **WorkBuddy 会话统计：** 对真实的 `type=message, role=assistant` 和带 usage 的 `function_call` / `reasoning` 记录，优先读取 `providerData.usage`，其次读取 `message.usage`、`providerData.rawUsage`。按 `providerData.messageId` 或 `message.id` 去重响应后，累计完整输入、输出和缓存读取量；Compact 不清空这些会话累计值。其 input 已包含缓存，不再次累加。`Cache` 使用累计缓存量除以累计输入，四舍五入保留两位小数；有效零命中显示 `0.00%`，未知或无效缓存量隐藏指标，不借用 stdin 的单次缓存量。
 
+CodeBuddy / WorkBuddy 的累计统计包含主日志及同名 session 目录下 `subagents/` 中所有 `agent-*.jsonl`（含嵌套目录）。主、子 agent 统一按响应 ID 去重，缺少上述响应 ID 时使用记录 `id`；没有任何 ID 的记录逐条计数。缓存量采用相同去重口径，不因 `isSidechain` 标记排除子 agent。正在写入的残缺 JSON 行暂时跳过，下次刷新重新读取。工具次数和运行时长仍只取主日志。
+
 **Token 回退逻辑：** WorkBuddy 有有效累计数据时保留合法零值；无 transcript 数据时回退到 stdin。原有 Claude Code 格式继续使用最新 assistant usage。
 
 **工具折叠逻辑：**

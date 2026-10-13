@@ -21,9 +21,19 @@ last_compact_ts=$(jq -r '[
     | .timestamp
 ] | max // empty' "$transcript_path" 2>/dev/null)
 
-# 第二步：单次 jq 调用提取所有统计数据
-jq_output=$(jq -r -s --arg compact_ts "$last_compact_ts" '
-  . as $all |
+# 子 agent 使用独立日志；仅扫描当前 session，包含嵌套的子 agent。
+usage_paths=("$transcript_path")
+subagents_dir="${transcript_path%.jsonl}/subagents"
+if [ -d "$subagents_dir" ]; then
+    while IFS= read -r -d '' agent_path; do
+        usage_paths+=("$agent_path")
+    done < <(find "$subagents_dir" -type f -name 'agent-*.jsonl' -print0)
+fi
+
+# 第二步：逐行解析，忽略仍在写入的残缺行；主日志单独保留用于工具和时长统计。
+jq_output=$(jq -r -n -R --arg compact_ts "$last_compact_ts" --arg main_path "$transcript_path" '
+  [inputs | input_filename as $source | fromjson? | {source: $source, record: .}] as $logs |
+  [$logs[] | select(.source == $main_path) | .record] as $all |
 
   # compact 后的记录（无 compact 则取全部）
   (if $compact_ts != "" and $compact_ts != "null" then
@@ -56,14 +66,14 @@ jq_output=$(jq -r -s --arg compact_ts "$last_compact_ts" '
          (try .inputTokensDetails.cached_tokens catch null),
          .prompt_tokens_details.cached_tokens, .prompt_cache_hit_tokens, .cache_read_input_tokens])} |
       select(.input != null or .output != null or .cached != null)) | first;
-  (any($all[]; (.type == "message" and .role == "assistant") or
+  (any($logs[].record; (.type == "message" and .role == "assistant") or
                (.providerData.usage != null) or (.providerData.rawUsage != null))) as $buddy |
-  (reduce ($all[] | select(.isSidechain != true and
+  (reduce ($logs[].record | select(
       (.type == "assistant" or .type == "reasoning" or .type == "function_call" or
        (.type == "message" and .role == "assistant")))) as $record
     ({seen: {}, count: 0, input: 0, output: 0, cached: 0, cache_known: true};
       ($record | buddy_usage) as $usage |
-      ($record.providerData.messageId // $record.message.id // null) as $id |
+      ($record.providerData.messageId // $record.message.id // $record.id // null) as $id |
       if $usage == null or $usage.input == null or $usage.output == null or
          ($id != null and .seen[$id] == true) then .
       else
@@ -98,7 +108,7 @@ jq_output=$(jq -r -s --arg compact_ts "$last_compact_ts" '
     buddy_count: $totals.count,
     buddy_cached: (if $totals.cache_known then $totals.cached else -1 end)
   } | to_entries | map(.value) | @tsv
-' "$transcript_path" 2>/dev/null || printf '0\t0\t0\t0\t0\t0\t0\t-1\n')
+' "${usage_paths[@]}" 2>/dev/null || printf '0\t0\t0\t0\t0\t0\t0\t-1\n')
 
 # tool_calls 由此处赋值（覆盖 parse_input.sh 中初始化的 0）；若 transcript 不存在则保持为 0
 read -r input_tokens output_tokens tool_calls first_epoch last_epoch buddy_mode buddy_count buddy_cached <<< "$jq_output"
