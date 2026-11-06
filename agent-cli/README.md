@@ -164,7 +164,7 @@ source lib/render.sh          # 最终输出
 | `format_duration <seconds>` | `205` | `3m25s` |
 | `format_number <number>` | `50000` | `50.00K` |
 | `get_context_color <pct>` | `80` | `\033[0;33m`（黄色）|
-| `build_progress_bar <pct>` | `42` | `███░░░░░ ` |
+| `build_progress_bar <pct> <fill_color>` | `42 "\033[0;32m"` | 胶囊进度条（14 格，5 格亮色底 + 9 格暗灰底，`context 42%` 白字居中，两端半圆）|
 
 颜色阈值：`< 75%` 绿色 / `>= 75%` 黄色 / `>= 90%` 红色
 

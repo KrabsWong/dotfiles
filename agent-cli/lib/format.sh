@@ -51,25 +51,49 @@ get_context_color() {
     fi
 }
 
-# 构建 8 格 Unicode 进度条
-# 用法: build_progress_bar <pct>
+# 构建胶囊进度条：两端 Nerd Font 半圆收口，百分比居中显示在条内
+# 已用部分铺亮色底、剩余部分铺暗灰底，数字统一白色加粗，进度经过数字时只换底色不遮挡
+# 条内空白用盲文空白 U+2800：app 会按普通空白切词重拼，会打乱位置
+# 用法: build_progress_bar <pct> <fill_color>（fill_color 形如 \033[0;32m）
 build_progress_bar() {
     local pct=$1
-    local width=8
+    local fill=$2
+    local width=14
+    local fill_bg="${fill#*0;3}"
+    fill_bg="4${fill_bg%m}"          # \033[0;32m -> 42
+    local track_bg="48;5;238"
+    # 注意：app 的 ANSI 解析器吃不下参数很多的合并 SGR（会把尾巴当文字打出来），每个属性单独一条转义
     local filled=$((pct * width / 100))
+    [ "$filled" -gt "$width" ] && filled=$width
     # 百分比非零时至少显示 1 格，避免进度条全空与数字不一致
     if [ "$pct" -gt 0 ] && [ "$filled" -eq 0 ]; then
         filled=1
     fi
-    local empty=$((width - filled))
-    local bar=""
 
-    for ((i=0; i<filled; i++)); do
-        bar="${bar}█"
-    done
-    for ((i=0; i<empty; i++)); do
-        bar="${bar}░"
+    # 标签 "context⠀42%"：中间用盲文空白，按字符数组逐格放，避免 bash 子串在非 UTF-8 locale 下切坏多字节字符
+    local label="${pct}%"
+    local -a chars=(c o n t e x t "\xE2\xA0\x80")
+    for ((i=0; i<${#label}; i++)); do chars+=("${label:i:1}"); done
+    local label_len=${#chars[@]}
+    local start=$(( (width - label_len) / 2 ))
+    local bar="" i bg ch prev_bg=""
+    for ((i=0; i<width; i++)); do
+        bg=$track_bg
+        [ "$i" -lt "$filled" ] && bg=$fill_bg
+        ch="\xE2\xA0\x80"
+        if [ "$i" -ge "$start" ] && [ "$i" -lt $((start + label_len)) ]; then
+            ch="${chars[i - start]}"
+        fi
+        if [ "$bg" != "$prev_bg" ]; then
+            bar="${bar}\033[0m\033[${bg}m\033[1m\033[38;2;255;255;255m"
+            prev_bg=$bg
+        fi
+        bar="${bar}${ch}"
     done
 
-    echo "${bar} "
+    # 圆角颜色跟随相邻格的底色（前景色画，不带背景，避免外溢）
+    local left_cap="\033[0;38;5;238m" right_cap="\033[0;38;5;238m"
+    [ "$filled" -gt 0 ] && left_cap="\033[0;${fill_bg/4/3}m"
+    [ "$filled" -eq "$width" ] && right_cap="\033[0;${fill_bg/4/3}m"
+    echo "${left_cap}\xEE\x82\xB6${bar}${right_cap}\xEE\x82\xB4\033[0m"
 }

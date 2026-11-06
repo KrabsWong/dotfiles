@@ -110,7 +110,7 @@ output_tokens_formatted=$(format_number "$output_tokens")
 
 # --- 上下文颜色和进度条 ---
 context_color=$(get_context_color "$context_percentage")
-context_bar=$(build_progress_bar "$context_percentage")
+context_bar=$(build_progress_bar "$context_percentage" "$context_color")
 
 # --- 组装目录行与会话信息行 ---
 # --- 模型徽章配色 ---
@@ -141,7 +141,7 @@ section_dir="\\033[0;36m${display_dir}${RESET}${git_compact}"
 # 所以首列用前景色画 Nerd Font 左圆角 U+E0B6，从第 1 列起才铺底色；结尾同理用右圆角 U+E0B4 收口。
 # 徽章内部用盲文空白 U+2800 当内边距：app 会按空白切词再用单空格重拼，普通空格位置不可控。
 section_model="\\033[0m${badge_cap}\\xEE\\x82\\xB6${badge_bg}\\033[39m${badge_emoji}${badge_fg}\\xE2\\xA0\\x80${model_short}\\033[0m${badge_cap}\\xEE\\x82\\xB4${RESET}"
-section_context="${context_color}${context_bar}${GRAY}${context_percentage}%${RESET}"
+section_context="${context_bar}"
 section_tokens="\\033[0;90mIn:\\033[0;32m${input_tokens_formatted} \\033[0;90mOut:\\033[0;33m${output_tokens_formatted}${RESET}${cache_hit_str}"
 section_time="\\033[0;34m${runtime}${RESET}"
 
