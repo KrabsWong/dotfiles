@@ -43,8 +43,10 @@ class UsageTests(unittest.TestCase):
             ["bash", "-c", '''
 source "$1/lib/format.sh"
 source "$1/lib/parse_input.sh"
-tools_mode=simple
 source "$1/lib/parse_transcript.sh"
+tools_mode=simple
+parse_input
+parse_transcript "$1/lib/transcript.jq"
 printf '%s %s %s %s %s\n' "$input_tokens" "$output_tokens" "$cache_read_tokens" "$tool_calls" "$runtime"
 ''', "statusline-test", str(ROOT)],
             input=json.dumps({"transcript_path": str(self.main)}),

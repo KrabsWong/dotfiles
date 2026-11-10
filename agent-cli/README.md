@@ -117,7 +117,7 @@ claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache
 ### 注意事项
 
 - 若脚本通过**符号链接**调用，主入口已使用 `readlink -f` 解析真实路径，`lib/` 模块可被正确找到，无需特殊处理。
-- 脚本依赖 `jq`（>= 1.6）、`git`、`awk`、`sort`、`mktemp`，macOS 和主流 Linux 发行版均已内置。
+- 脚本依赖 `jq`（>= 1.6）、`git`、`awk` 及系统命令（`sort`、`uniq`、`find`、`cksum`、`cut`、`readlink` 等）；请确保已安装 `jq` 和 `git`。
 
 ---
 
@@ -125,12 +125,13 @@ claude-sonnet-4-6 │ ████░░░░ 42% │ In:50.00K Out:3.00K Cache
 
 ```
 agent-cli/
-├── statusline.sh              # 主入口与模式参数
+├── statusline.sh              # 主入口、模式参数与显式调用流程
 ├── README.md
 └── lib/
     ├── format.sh              # 格式化工具函数（纯函数，无副作用）
     ├── parse_input.sh         # 从 stdin 解析 JSON 输入
-    ├── parse_transcript.sh    # 解析 .jsonl transcript 文件
+    ├── parse_transcript.sh    # 日志发现、调用解析、准备统计结果
+    ├── transcript.jq          # transcript 解析与聚合规则
     ├── git_info.sh            # 检测 git 仓库状态
     └── render.sh              # 组装并输出两到三行状态栏
 ```
@@ -141,15 +142,17 @@ agent-cli/
 
 ### `statusline.sh`（主入口）
 
-按顺序 `source` 各模块，模块间通过共享 bash 变量传递数据：
+`source` 只加载函数定义，不读取 stdin、不输出状态栏、不创建临时文件或设置 trap。入口通过显式调用组织流程：
 
 ```bash
-source lib/format.sh          # 需最先加载
-source lib/parse_input.sh     # 读取 stdin
-source lib/parse_transcript.sh
-source lib/git_info.sh
-source lib/render.sh          # 最终输出
+parse_input
+parse_transcript "$SCRIPT_DIR/lib/transcript.jq"
+prepare_usage
+collect_git_info
+render_statusline
 ```
+
+结果变量集中声明在 `main` 中，通过 Bash 动态作用域在各阶段共享；各函数的中间变量使用 `local`。
 
 使用 `readlink -f` 解析脚本真实路径，确保符号链接场景下 `lib/` 路径正确。
 
@@ -172,7 +175,7 @@ source lib/render.sh          # 最终输出
 
 ### `lib/parse_input.sh`
 
-从 **stdin** 读取 JSON，单次 `jq` 调用提取 10 个字段：
+调用 `parse_input` 时从 **stdin** 读取 JSON，单次 `jq` 调用提取 10 个字段：
 
 | 变量 | JSON 路径 |
 |------|-----------|
@@ -188,7 +191,9 @@ source lib/render.sh          # 最终输出
 
 ---
 
-### `lib/parse_transcript.sh`
+### `lib/parse_transcript.sh` / `lib/transcript.jq`
+
+`parse_transcript <jq_program>` 负责发现日志文件、调用 jq 和接收结果；较长的聚合程序通过 `jq -f` 从 `transcript.jq` 加载。
 
 解析 `.jsonl` 格式的会话记录文件，兼容两种格式：
 
@@ -205,13 +210,15 @@ source lib/render.sh          # 最终输出
 - token 统计**仅计 compact 之后**的记录
 - 工具调用和会话时长**保持全局统计**（不受 compact 影响）
 
-**输出变量：** `input_tokens`, `output_tokens`, `tool_calls`, `runtime`, `tool_counts_file`
+**输出变量：** `input_tokens`, `output_tokens`, `cache_read_tokens`, `workbuddy_usage`, `tool_calls`, `runtime`, `tool_names`。工具名列表保存在变量中，不再创建临时文件。
+
+`prepare_usage` 在渲染前执行 token 回退并计算 `cache_hit_pct`；渲染层只展示结果，不修改统计值。
 
 ---
 
 ### `lib/git_info.sh`
 
-检测工作目录的 git 状态，输出变量：
+调用 `collect_git_info` 检测工作目录的 git 状态，输出变量：
 
 | 变量 | 含义 |
 |------|------|
@@ -221,6 +228,8 @@ source lib/render.sh          # 最终输出
 ---
 
 ### `lib/render.sh`
+
+`render_statusline` 组装并输出两到三行状态栏；`render_model_badge` 负责模型徽章，`format_tool_summary` 负责工具明细折叠。配色、ANSI 序列、圆角字符和展示规则保持原样。
 
 组装并输出两到三行状态栏：
 
@@ -265,13 +274,12 @@ CodeBuddy / WorkBuddy 的累计统计包含主日志及同名 session 目录下 
 | `git` | 仓库状态检测 | 任意版本 |
 | `awk` | 工具统计折叠 | BSD awk / GNU awk 均可 |
 | `sort` / `uniq` | 工具调用频次统计 | 系统内置 |
-| `mktemp` | 临时文件 | 系统内置 |
 
 ---
 
 ## 设计决策
 
-1. **`source` 方式加载模块**：各模块共享同一进程变量空间，无需管道/导出，最简单且无性能开销
+1. **加载与执行分离**：`source` 只定义函数，入口显式调用各阶段；结果变量集中管理，中间变量局部化
 2. **`readlink -f` 解析符号链接**：确保通过 symlink 调用时，`lib/` 路径基于脚本真实位置而非链接位置
 3. **单次 jq 调用**：stdin JSON 字段一次性全部提取
 4. **Compact 感知**：区分 compact 前后 token，让显示值与当前上下文窗口对应
@@ -279,3 +287,14 @@ CodeBuddy / WorkBuddy 的累计统计包含主日志及同名 session 目录下 
 6. **timestamp 兼容**：自动区分毫秒整数（CodeBuddy）和 ISO 8601 字符串（ClaudeCode）
 7. **awk `-v` 传递 Unicode 符号**：避免 BSD awk 不支持 octal 字节序列（`×` 符号）
 8. **token 回退机制**：transcript 无数据时自动回退到 stdin `context_window` 数据
+
+
+## 回归验证
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s agent-cli/tests -v
+```
+
+- `test_usage.py` 验证主/子 agent 聚合、去重、缓存未知值、残缺行及 Claude usage。
+- `test_statusline.py` 对照重构前保存的 `statusline_snapshots.json`，比较完整 ANSI 输出、stderr 和退出码，覆盖默认/完整工具模式、折叠规则、颜色阈值、徽章与缓存显示等，并验证符号链接入口和模块加载无副作用。
+- 本次仅重构组织方式，保留现有统计口径及解析行为；行为修复应单独修改并验证对应样例。

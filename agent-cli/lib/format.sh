@@ -71,12 +71,13 @@ build_progress_bar() {
     fi
 
     # 标签 "context⠀42%"：中间用盲文空白，按字符数组逐格放，避免 bash 子串在非 UTF-8 locale 下切坏多字节字符
+    local i
     local label="${pct}%"
     local -a chars=(c o n t e x t "\xE2\xA0\x80")
     for ((i=0; i<${#label}; i++)); do chars+=("${label:i:1}"); done
     local label_len=${#chars[@]}
     local start=$(( (width - label_len) / 2 ))
-    local bar="" i bg ch prev_bg=""
+    local bar="" bg ch prev_bg=""
     for ((i=0; i<width; i++)); do
         bg=$track_bg
         [ "$i" -lt "$filled" ] && bg=$fill_bg
